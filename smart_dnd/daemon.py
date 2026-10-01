@@ -58,9 +58,17 @@ class SmartDndDaemon:
         )
 
         self._ipc_server = IpcServer(self._dispatch_ipc)
-        self.tray = StatusNotifierTray(on_toggle_dnd=self._toggle_dnd_tray)
+        self.tray = StatusNotifierTray(
+            on_toggle_dnd=self._toggle_dnd_tray,
+            on_open_gui=self._toggle_gui_tray,
+            on_quit=self.stop,
+        )
         self._cached_events: List[CalendarEvent] = []
         self._last_event_fetch_ts: float = 0.0
+
+    def _toggle_gui_tray(self) -> None:
+        from smart_dnd.sni import toggle_gui
+        toggle_gui()
 
     def _toggle_dnd_tray(self) -> Status:
         cur = self._notification_plugin.is_dnd_enabled()
@@ -217,7 +225,7 @@ class SmartDndDaemon:
         sched_trans = next_transition(self.config.schedules, now_ms)
         cal_trans = calendar_next_transition(self.config.calendar_rules, events, now_ms, self.config.ignore_all_day)
 
-        if self.config.master_enabled and not desired:
+        if self.config.master_enabled:
             s_start = next_start(self.config.schedules, now_ms)
             c_start = next_enable(self.config.calendar_rules, events, now_ms, self.config.ignore_all_day)
             if s_start is not None:

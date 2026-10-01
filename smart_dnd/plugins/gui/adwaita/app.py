@@ -28,8 +28,15 @@ class SmartDndApp(Adw.Application):
         self.config = config
         self.win: MainWindow | None = None
 
+    def do_startup(self) -> None:
+        Adw.Application.do_startup(self)
+
+        toggle_act = Gio.SimpleAction.new("toggle", None)
+        toggle_act.connect("activate", lambda *_: self.toggle_window())
+        self.add_action(toggle_act)
+
     def do_activate(self) -> None:
-        if not self.win:
+        if not self.win or self.win not in self.get_windows():
             self.win = MainWindow(self, self.client, self.config)
 
             # Setup actions
@@ -42,6 +49,14 @@ class SmartDndApp(Adw.Application):
             self.add_action(about_act)
 
         self.win.present()
+
+    def toggle_window(self) -> None:
+        if not self.win or self.win not in self.get_windows():
+            self.do_activate()
+        elif self.win.is_visible():
+            self.win.set_visible(False)
+        else:
+            self.win.present()
 
 
 class AdwaitaGuiPlugin(GuiPlugin):
