@@ -47,7 +47,8 @@
   <releases>
     <release version="0.1.0" date="2026-10-01">
       <description>
-        <p>Initial release.</p>
+        <p>The first release of Smart DND for Linux.</p>
+        <p>Smart DND turns on Do Not Disturb for you: on a regular schedule, such as weeknights, or during meetings and other events in your calendar. It turns it off again when they end, and it never overrides a change you make yourself.</p>
       </description>
     </release>
   </releases>

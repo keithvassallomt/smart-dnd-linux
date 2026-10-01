@@ -107,7 +107,11 @@ Triggers: the timer, IPC `save_config` / `evaluate` / `toggle_dnd`, resume from 
   (`monochrome_tray_icon`) because Caelestia does not recolour symbolic icons, which leaves a black
   icon on a dark panel.
 - **Versions:** `pyproject.toml`, `smart_dnd/__init__.py` and the newest metainfo `<release>` must
-  agree (`just check-version`, also a test). The About dialog reads `__version__`; deb/rpm/AUR
+  agree (`just check-version`, also a test). `CHANGELOG.md` follows Keep a Changelog and SemVer: add
+  user-facing changes under `[Unreleased]` as you make them. `just release` (with
+  `packaging/release.py`) settles the version, commits, tags and pushes; never run it yourself,
+  since it publishes to GitHub and the AUR. Test it in a scratch clone whose `origin` is a local
+  bare repo. The About dialog reads `__version__`; deb/rpm/AUR
   versions are set from the tag by the release workflow.
 - **Flatpak sandbox rules:**
   - Any subprocess call to a host tool must go through `host.host_argv` / `which_host`.

@@ -32,6 +32,8 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
           echo "Version $version (publish: $publish)"
+      - name: Check CHANGELOG.md has this version's release notes
+        run: python3 packaging/release.py notes "${{ steps.check.outputs.version }}"
 
   python:
     name: Wheel and sdist
@@ -154,7 +156,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: release-assets
@@ -162,8 +167,29 @@ jobs:
       - name: Generate checksums
         working-directory: release-assets
         run: sha256sum * | tee SHA256SUMS
+      - name: Write release notes
+        run: |
+          {
+            python3 packaging/release.py notes "$VERSION"
+            cat <<EOF
+
+          ## Install
+
+          - **Flatpak**: from [FriendlyHub](https://friendlyhub.org), or \`smart-dnd-$VERSION-x86_64.flatpak\` below
+          - **Arch Linux**: [\`smart-dnd\`](https://aur.archlinux.org/packages/smart-dnd) on the AUR
+          - **Debian / Ubuntu**: \`smart-dnd_$VERSION-1_all.deb\`
+          - **Fedora**: the \`.rpm\` below
+          - **Python**: \`smart_dnd_linux-$VERSION-py3-none-any.whl\`
+
+          \`SHA256SUMS\` lists the checksum of every file.
+          EOF
+          } > release-notes.md
+          cat release-notes.md
+      # The changelog section, then GitHub's generated "Full Changelog" link.
       - uses: softprops/action-gh-release@v3
         with:
+          name: Smart DND ${{ needs.version.outputs.version }}
+          body_path: release-notes.md
           files: release-assets/*
           generate_release_notes: true
 
