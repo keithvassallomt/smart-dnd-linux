@@ -29,6 +29,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._available_plugins = self._fetch_plugins()
         self._calendars = self._fetch_calendars()
+        self._events = self._fetch_events()
 
         self._build_ui()
         self._update_status()
@@ -61,6 +62,17 @@ class MainWindow(Adw.ApplicationWindow):
         except Exception:
             return []
 
+    def _fetch_events(self) -> List[Any]:
+        try:
+            from smart_dnd.plugins.manager import PluginManager
+            pm = PluginManager()
+            cal_plugin = pm.get_calendar_plugin(self.config.calendar_backend)
+            import time
+            now_sec = time.time()
+            return cal_plugin.get_events(now_sec - 86400, now_sec + 7 * 86400)
+        except Exception:
+            return []
+
     def _build_ui(self) -> None:
         toolbar = Adw.ToolbarView()
         self.set_content(toolbar)
@@ -73,7 +85,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.stack.add_titled_with_icon(self.sched_page, "schedules", "Schedules", "alarm-symbolic")
 
         # Calendar Rules Page
-        self.cal_page = CalendarPage(self.config, self._calendars, self._on_save_config)
+        self.cal_page = CalendarPage(self.config, self._calendars, self._events, self._on_save_config)
         self.stack.add_titled_with_icon(self.cal_page, "calendar", "Calendar Rules", "x-office-calendar-symbolic")
 
         # Header bar

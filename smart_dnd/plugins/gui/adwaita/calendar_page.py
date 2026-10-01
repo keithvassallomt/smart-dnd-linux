@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Callable, List
 
@@ -10,7 +11,13 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
-from smart_dnd.models import CalendarRule, CalendarSource, Config
+from smart_dnd.format import format_when
+from smart_dnd.matcher import (
+    calendar_next_transition,
+    next_enable,
+    rules_active_at,
+)
+from smart_dnd.models import CalendarEvent, CalendarRule, CalendarSource, Config
 
 MATCH_TYPES = [
     ("contains", "Contains"),
@@ -27,12 +34,16 @@ class CalendarRuleRow(Adw.ExpanderRow):
         self,
         rule: CalendarRule,
         calendars: List[CalendarSource],
+        events: List[CalendarEvent],
+        config: Config,
         on_change: Callable[[], None],
         on_delete: Callable[[CalendarRule], None],
     ) -> None:
         super().__init__()
         self.rule = rule
         self.calendars = calendars
+        self.events = events
+        self.config = config
         self.on_change = on_change
         self.on_delete = on_delete
 
@@ -45,10 +56,27 @@ class CalendarRuleRow(Adw.ExpanderRow):
         self._update_headers()
 
     def _update_headers(self) -> None:
+        now_sec = time.time()
+        now_ms = now_sec * 1000.0
+
         self.set_title(self.rule.name or "Untitled Rule")
         m_label = next((label for k, label in MATCH_TYPES if k == self.rule.match_type), self.rule.match_type)
         cal_str = f"{len(self.rule.calendars)} calendars" if self.rule.calendars else "All calendars"
-        self.set_subtitle(f"{m_label} \"{self.rule.pattern}\" • {cal_str}")
+        pat_str = f'"{self.rule.pattern}"' if self.rule.pattern else "Any event"
+
+        if not self.rule.enabled:
+            status_text = "Disabled"
+        elif rules_active_at([self.rule], self.events, now_ms, ignore_all_day=self.config.ignore_all_day):
+            ends_ms = calendar_next_transition([self.rule], self.events, now_ms, ignore_all_day=self.config.ignore_all_day)
+            status_text = f"Active now (ends {format_when(now_ms, ends_ms)})"
+        else:
+            nxt_on_ms = next_enable([self.rule], self.events, now_ms, ignore_all_day=self.config.ignore_all_day)
+            if nxt_on_ms:
+                status_text = f"Next: {format_when(now_ms, nxt_on_ms)}"
+            else:
+                status_text = "No upcoming events"
+
+        self.set_subtitle(f"{status_text} • {m_label} {pat_str} • {cal_str}")
 
     def _on_switch_toggled(self, *args) -> None:
         self.rule.enabled = self.switch.get_active()
@@ -156,11 +184,13 @@ class CalendarPage(Adw.PreferencesPage):
         self,
         config: Config,
         calendars: List[CalendarSource],
+        events: List[CalendarEvent],
         on_save: Callable[[Config], None],
     ) -> None:
         super().__init__()
         self.config = config
         self.calendars = calendars
+        self.events = events
         self.on_save = on_save
 
         self.group = Adw.PreferencesGroup(title="Calendar Matching Rules")
@@ -185,6 +215,8 @@ class CalendarPage(Adw.PreferencesPage):
             row = CalendarRuleRow(
                 rule,
                 self.calendars,
+                self.events,
+                self.config,
                 on_change=lambda: self.on_save(self.config),
                 on_delete=self._on_delete_rule,
             )
@@ -193,9 +225,9 @@ class CalendarPage(Adw.PreferencesPage):
     def _on_add_rule(self, *args) -> None:
         new_rule = CalendarRule(
             id=str(uuid.uuid4())[:8],
-            name="Meeting Rule",
+            name="Rule",
             match_type="contains",
-            pattern="Meeting",
+            pattern="",
             calendars=[],
             enable_offset_min=0,
             disable_offset_min=0,

@@ -30,6 +30,7 @@ from smart_dnd.scheduler import (
     next_transition,
     py_to_js_dow,
 )
+from smart_dnd.sni import StatusNotifierTray
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,16 @@ class SmartDndDaemon:
         )
 
         self._ipc_server = IpcServer(self._dispatch_ipc)
+        self.tray = StatusNotifierTray(on_toggle_dnd=self._toggle_dnd_tray)
         self._cached_events: List[CalendarEvent] = []
         self._last_event_fetch_ts: float = 0.0
+
+    def _toggle_dnd_tray(self) -> Status:
+        cur = self._notification_plugin.is_dnd_enabled()
+        self._notification_plugin.set_dnd(not cur)
+        if cur:
+            self._owned = False
+        return self.evaluate()
 
     def start(self) -> None:
         logger.info("Starting Smart DND Daemon...")
@@ -66,6 +75,9 @@ class SmartDndDaemon:
         # 1. Listen on Unix IPC socket
         server_sock = self._ipc_server.start()
         GLib.io_add_watch(server_sock.fileno(), GLib.IOCondition.IN, self._on_socket_ready, server_sock)
+
+        # 2. Start StatusNotifierItem Tray
+        self.tray.start()
 
         # 2. Hook systemd logind PrepareForSleep signal
         try:
@@ -116,6 +128,7 @@ class SmartDndDaemon:
                 logger.error("Failed releasing DND on shutdown: %s", e)
             self._owned = False
 
+        self.tray.stop()
         self._ipc_server.close()
         if self._main_loop.is_running():
             self._main_loop.quit()
@@ -232,6 +245,7 @@ class SmartDndDaemon:
         )
 
         self._arm_timer(now_ms, candidates_off + candidates_on)
+        self.tray.update_status(self.status)
         return self.status
 
     def _arm_timer(self, now_ms: float, candidates: List[float]) -> None:

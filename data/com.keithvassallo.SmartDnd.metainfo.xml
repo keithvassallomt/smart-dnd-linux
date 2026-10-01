@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.keithvassallo.SmartDnd</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Smart DND</name>
+  <summary>Automated Do Not Disturb based on schedules and calendar events</summary>
+  <description>
+    <p>
+      Smart DND automatically enables Do Not Disturb (DND) mode on a schedule or during matching calendar events.
+    </p>
+    <p>
+      Features:
+    </p>
+    <ul>
+      <li>Automated schedule windows with midnight wrapping</li>
+      <li>Calendar event keyword and regex pattern matching</li>
+      <li>Buffer offsets to start DND early or extend after meetings</li>
+      <li>Pluggable architecture for calendar backends, notification systems, and frontends</li>
+      <li>Native Libadwaita interface with system tray integration</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.keithvassallo.SmartDnd.desktop</launchable>
+  <url type="homepage">https://github.com/keithvassallomt/smart-dnd</url>
+  <url type="bugtracker">https://github.com/keithvassallomt/smart-dnd/issues</url>
+  <developer_name>Keith Vassallo</developer_name>
+  <releases>
+    <release version="0.1.0" date="2026-10-01"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

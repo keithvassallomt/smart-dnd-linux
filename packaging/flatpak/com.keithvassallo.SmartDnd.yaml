@@ -1,0 +1,35 @@
+app-id: com.keithvassallo.SmartDnd
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: smart-dnd
+
+finish-args:
+  # Display & IPC
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # Session Bus permissions for notifications, StatusNotifierItem, and Evolution
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.kde.StatusNotifierItem
+  - --talk-name=org.gnome.evolution.dataserver.*
+  - --talk-name=org.freedesktop.login1
+  - --system-talk-name=org.freedesktop.login1
+  # Filesystem permissions for user configs
+  - --filesystem=xdg-config/smart-dnd:create
+  - --filesystem=xdg-run/smart-dnd:create
+
+modules:
+  - name: smart-dnd
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-build-isolation --no-deps --prefix=/app .
+      - install -Dm644 data/com.keithvassallo.SmartDnd.desktop /app/share/applications/com.keithvassallo.SmartDnd.desktop
+      - install -Dm644 data/com.keithvassallo.SmartDnd.metainfo.xml /app/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml
+      - install -Dm644 data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg /app/share/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg
+      - install -Dm644 data/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg /app/share/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg
+      - for s in 16 32 48 64 128 256 512; do install -Dm644 data/icons/hicolor/${s}x${s}/apps/com.keithvassallo.SmartDnd.png /app/share/icons/hicolor/${s}x${s}/apps/com.keithvassallo.SmartDnd.png; done
+    sources:
+      - type: dir
+        path: ../..

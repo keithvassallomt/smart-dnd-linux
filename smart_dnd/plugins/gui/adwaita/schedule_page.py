@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+import time
 import uuid
 from typing import Callable, List
 
@@ -10,7 +12,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
+from smart_dnd.format import format_when
 from smart_dnd.models import Config, Schedule
+from smart_dnd.scheduler import (
+    next_start,
+    next_transition,
+    py_to_js_dow,
+    schedule_active_at,
+)
 
 DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -39,9 +48,29 @@ class ScheduleRow(Adw.ExpanderRow):
         self._update_headers()
 
     def _update_headers(self) -> None:
+        now_sec = time.time()
+        now_ms = now_sec * 1000.0
+        now_dt = datetime.datetime.fromtimestamp(now_sec)
+        dow = py_to_js_dow(now_dt.weekday())
+        minutes = now_dt.hour * 60 + now_dt.minute
+
         self.set_title(self.schedule.name or "Untitled Schedule")
         days_str = ", ".join(DAY_LABELS[d] for d in sorted(self.schedule.days)) if self.schedule.days else "No days"
-        self.set_subtitle(f"{days_str} • {self.schedule.start} – {self.schedule.end}")
+        time_str = f"{days_str} • {self.schedule.start} – {self.schedule.end}"
+
+        if not self.schedule.enabled:
+            status_text = "Disabled"
+        elif schedule_active_at(self.schedule, dow, minutes):
+            ends_ms = next_transition([self.schedule], now_ms)
+            status_text = f"Active now (ends {format_when(now_ms, ends_ms)})"
+        else:
+            next_start_ms = next_start([self.schedule], now_ms)
+            if next_start_ms:
+                status_text = f"Next: {format_when(now_ms, next_start_ms)}"
+            else:
+                status_text = "No upcoming schedule"
+
+        self.set_subtitle(f"{status_text} • {time_str}")
 
     def _on_switch_toggled(self, *args) -> None:
         self.schedule.enabled = self.switch.get_active()

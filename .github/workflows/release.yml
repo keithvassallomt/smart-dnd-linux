@@ -1,0 +1,123 @@
+name: Release & Distribution Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-python:
+    name: Build Python Wheels & Sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Wheel and Sdist
+        run: |
+          pip install build hatchling
+          python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+
+  build-deb:
+    name: Build Debian / Ubuntu Package (.deb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Packaging Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper dh-python python3-all python3-hatchling python3-build python3-installer python3-wheel
+      - name: Build DEB
+        run: |
+          dpkg-buildpackage -us -uc -b
+          mkdir -p deb-dist
+          mv ../smart-dnd_*.deb deb-dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: deb-dist/*
+
+  build-rpm:
+    name: Build Fedora / RHEL Package (.rpm)
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install RPM Build Tools
+        run: |
+          dnf install -y rpm-build python3-devel python3-pip python3-build python3-installer python3-hatchling python3-wheel systemd-rpm-macros tar git
+      - name: Prepare Source Tarball & Build RPM
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/SPECS
+          git archive --format=tar.gz --prefix=smart-dnd-${VERSION}/ -o ~/rpmbuild/SOURCES/smart-dnd-${VERSION}.tar.gz HEAD
+          cp packaging/rpm/smart-dnd.spec ~/rpmbuild/SPECS/
+          sed -i "s/^Version:.*/Version:        ${VERSION}/" ~/rpmbuild/SPECS/smart-dnd.spec
+          rpmbuild -ba ~/rpmbuild/SPECS/smart-dnd.spec
+          mkdir -p rpm-dist
+          cp ~/rpmbuild/RPMS/*/*.rpm rpm-dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: rpm-dist/*
+
+  build-flatpak:
+    name: Build Flatpak Bundle (.flatpak)
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: SmartDnd.flatpak
+          manifest-path: packaging/flatpak/com.keithvassallo.SmartDnd.yaml
+          app-id: com.keithvassallo.SmartDnd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: SmartDnd.flatpak
+
+  publish-aur:
+    name: Update AUR PKGBUILD
+    needs: [build-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate .SRCINFO
+        run: |
+          echo "AUR package ready in packaging/aur/PKGBUILD"
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-python, build-deb, build-rpm, build-flatpak]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate Checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

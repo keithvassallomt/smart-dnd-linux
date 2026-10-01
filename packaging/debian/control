@@ -1,0 +1,29 @@
+Source: smart-dnd
+Section: utils
+Priority: optional
+Maintainer: Keith Vassallo <keith@keithvassallo.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-hatchling,
+               python3-build,
+               python3-installer,
+               python3-wheel
+Standards-Version: 4.6.2
+Homepage: https://github.com/keithvassallomt/smart-dnd
+
+Package: smart-dnd
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         python3,
+         python3-gi,
+         gir1.2-gtk-4.0,
+         gir1.2-adw-1,
+         gir1.2-ecal-2.0,
+         gir1.2-edataserver-1.2
+Description: Automated Do Not Disturb based on schedules and calendar events
+ Smart DND automatically manages Do Not Disturb state on Linux desktops
+ based on customizable time schedules and calendar events. Includes a
+ modern Libadwaita GUI and support for Evolution Data Server, Caelestia,
+ SwayNC, and Dunst.

@@ -1,0 +1,53 @@
+# Maintainer: Keith Vassallo
+pkgname=smart-dnd-git
+pkgver=0.1.0.r0
+pkgrel=1
+pkgdesc="Automated Do Not Disturb based on schedules and calendar events for Linux desktops"
+arch=('any')
+url="https://github.com/keithvassallomt/smart-dnd"
+license=('GPL-3.0-or-later')
+depends=(
+    'python'
+    'python-gobject'
+    'libadwaita'
+    'evolution-data-server'
+)
+makedepends=(
+    'git'
+    'python-build'
+    'python-installer'
+    'python-hatchling'
+    'python-wheel'
+)
+provides=('smart-dnd')
+conflicts=('smart-dnd')
+source=("git+https://github.com/keithvassallomt/smart-dnd-linux.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/smart-dnd-linux"
+    printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+    cd "${srcdir}/smart-dnd-linux"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/smart-dnd-linux"
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+
+    install -Dm644 data/com.keithvassallo.SmartDnd.desktop "${pkgdir}/usr/share/applications/com.keithvassallo.SmartDnd.desktop"
+    install -Dm644 data/com.keithvassallo.SmartDnd.metainfo.xml "${pkgdir}/usr/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml"
+    install -Dm644 data/smart-dnd.service "${pkgdir}/usr/lib/systemd/user/smart-dnd.service"
+
+    # Install icons
+    install -Dm644 data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg"
+    install -Dm644 data/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg "${pkgdir}/usr/share/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg"
+
+    for size in 16 32 48 64 128 256 512; do
+        install -Dm644 data/icons/hicolor/${size}x${size}/apps/com.keithvassallo.SmartDnd.png \
+            "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/com.keithvassallo.SmartDnd.png"
+    done
+}
