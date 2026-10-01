@@ -5,9 +5,9 @@ from __future__ import annotations
 import datetime
 import logging
 import signal
-import sys
+import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import gi
 gi.require_version("Gio", "2.0")
@@ -18,14 +18,14 @@ from smart_dnd.config import load_config, save_config
 from smart_dnd.coordinator import compute_desired, reconcile
 from smart_dnd.ipc import IpcServer
 from smart_dnd.matcher import (
+    active_match_at,
     calendar_next_transition,
     next_enable,
-    rules_active_at,
 )
 from smart_dnd.models import CalendarEvent, Config, Status
 from smart_dnd.plugins.manager import PluginManager
 from smart_dnd.scheduler import (
-    any_active_at,
+    first_active_at,
     next_start,
     next_transition,
     py_to_js_dow,
@@ -33,6 +33,9 @@ from smart_dnd.scheduler import (
 from smart_dnd.sni import StatusNotifierTray
 
 logger = logging.getLogger(__name__)
+
+# Calendar events are re-fetched in the background once the cache is older than this.
+EVENT_CACHE_TTL_SEC = 60.0
 
 
 class SmartDndDaemon:
@@ -59,19 +62,24 @@ class SmartDndDaemon:
 
         self._ipc_server = IpcServer(self._dispatch_ipc)
         self.tray = StatusNotifierTray(
-            on_toggle_dnd=self._toggle_dnd_tray,
+            on_toggle_dnd=self.toggle_dnd,
             on_open_gui=self._toggle_gui_tray,
             on_quit=self.stop,
             monochrome=self.config.monochrome_tray_icon,
         )
         self._cached_events: List[CalendarEvent] = []
         self._last_event_fetch_ts: float = 0.0
+        self._fetch_in_flight: bool = False
+        # Bumped when the calendar plugin changes, so a late result from the old one is dropped.
+        self._calendar_generation: int = 0
+        self._stopped: bool = False
 
     def _toggle_gui_tray(self) -> None:
         from smart_dnd.sni import toggle_gui
         toggle_gui()
 
-    def _toggle_dnd_tray(self) -> Status:
+    def toggle_dnd(self) -> Status:
+        """Flip DND by hand. Turning it off releases daemon ownership."""
         cur = self._notification_plugin.is_dnd_enabled()
         self._notification_plugin.set_dnd(not cur)
         if cur:
@@ -119,6 +127,10 @@ class SmartDndDaemon:
             self.stop()
 
     def stop(self) -> None:
+        # Runs twice on a signal: once from the handler, again from start()'s finally.
+        if self._stopped:
+            return
+        self._stopped = True
         logger.info("Stopping Smart DND Daemon...")
         if self._timer_id:
             GLib.source_remove(self._timer_id)
@@ -170,17 +182,64 @@ class SmartDndDaemon:
                 logger.debug("Socket accept error: %s", e)
         return GLib.SOURCE_CONTINUE
 
+    @staticmethod
+    def _event_range(now_sec: float) -> Tuple[float, float]:
+        return now_sec - 86400.0, now_sec + 7 * 86400.0
+
     def _get_events(self, now_sec: float) -> List[CalendarEvent]:
-        # Cache events for 60 seconds unless invalidated
-        if now_sec - self._last_event_fetch_ts > 60.0 or not self._cached_events:
-            start_range = now_sec - 86400.0
-            end_range = now_sec + 7 * 86400.0
+        """Return cached events, starting a background refresh when the cache is stale.
+
+        Fetching runs off the main loop so a slow calendar backend (an EDS factory
+        starting up, a remote CalDAV source) never blocks IPC, the tray or timers.
+        Stale events still give correct timings until the refresh lands.
+        """
+        if now_sec - self._last_event_fetch_ts > EVENT_CACHE_TTL_SEC:
+            self._start_event_refresh(now_sec)
+        return self._cached_events
+
+    def _start_event_refresh(self, now_sec: float) -> None:
+        if self._fetch_in_flight:
+            return
+        self._fetch_in_flight = True
+        plugin = self._calendar_plugin
+        generation = self._calendar_generation
+        start_range, end_range = self._event_range(now_sec)
+
+        def worker() -> None:
+            events: Optional[List[CalendarEvent]]
             try:
-                self._cached_events = self._calendar_plugin.get_events(start_range, end_range)
-                self._last_event_fetch_ts = now_sec
+                events = plugin.get_events(start_range, end_range)
             except Exception as e:
                 logger.error("Error fetching calendar events: %s", e)
-        return self._cached_events
+                events = None
+            GLib.idle_add(self._on_events_fetched, generation, events, now_sec)
+
+        threading.Thread(target=worker, name="smart-dnd-calendar", daemon=True).start()
+
+    def _on_events_fetched(
+        self,
+        generation: int,
+        events: Optional[List[CalendarEvent]],
+        fetched_at: float,
+    ) -> bool:
+        self._fetch_in_flight = False
+        if generation == self._calendar_generation:
+            if events is not None:
+                self._cached_events = events
+            # Stamp failures too, so a broken backend is retried after the TTL rather than in a loop.
+            self._last_event_fetch_ts = fetched_at
+        self.evaluate()
+        return GLib.SOURCE_REMOVE
+
+    def refresh_events_blocking(self) -> None:
+        """Fetch events synchronously, for one-shot use without a main loop (`smart-dnd eval`)."""
+        now_sec = time.time()
+        start_range, end_range = self._event_range(now_sec)
+        try:
+            self._cached_events = self._calendar_plugin.get_events(start_range, end_range)
+        except Exception as e:
+            logger.error("Error fetching calendar events: %s", e)
+        self._last_event_fetch_ts = now_sec
 
     def evaluate(self) -> Status:
         now_sec = time.time()
@@ -191,10 +250,13 @@ class SmartDndDaemon:
 
         events = self._get_events(now_sec)
 
-        schedule_active = any_active_at(self.config.schedules, dow, minutes)
-        calendar_active = rules_active_at(self.config.calendar_rules, events, now_ms, self.config.ignore_all_day)
+        active_schedule = first_active_at(self.config.schedules, dow, minutes)
+        active_match = active_match_at(self.config.calendar_rules, events, now_ms, self.config.ignore_all_day)
+        schedule_active = active_schedule is not None
+        calendar_active = active_match is not None
 
         desired = compute_desired(self.config.master_enabled, schedule_active, calendar_active)
+        # Query once per evaluation: shell-based backends spawn a process per call.
         dnd_on = self._notification_plugin.is_dnd_enabled()
 
         rec = reconcile(desired, self._last_desired, self._owned, dnd_on)
@@ -203,19 +265,21 @@ class SmartDndDaemon:
 
         if rec.action == "on":
             logger.info("Enabling DND (Triggered by Smart DND)")
-            self._notification_plugin.set_dnd(True)
+            if self._notification_plugin.set_dnd(True):
+                dnd_on = True
         elif rec.action == "off":
             logger.info("Disabling DND (Smart DND window ended)")
-            self._notification_plugin.set_dnd(False)
+            if self._notification_plugin.set_dnd(False):
+                dnd_on = False
 
         # Calculate reason
         reason = "idle"
         trigger_name = None
         if desired:
-            if schedule_active:
-                reason = "schedule"
-            elif calendar_active:
-                reason = "calendar"
+            if active_schedule is not None:
+                reason, trigger_name = "schedule", active_schedule.name
+            elif active_match is not None:
+                reason, trigger_name = "calendar", active_match[1].summary
         elif dnd_on and not self._owned:
             reason = "manual"
 
@@ -243,7 +307,7 @@ class SmartDndDaemon:
         next_off_ms = min(candidates_off) if (desired and candidates_off) else None
 
         self.status = Status(
-            active=self._notification_plugin.is_dnd_enabled(),
+            active=dnd_on,
             reason=reason,
             trigger_name=trigger_name,
             next_on_ms=next_on_ms,
@@ -283,6 +347,8 @@ class SmartDndDaemon:
     def reload_plugins(self) -> None:
         self._calendar_plugin = self.plugin_manager.get_calendar_plugin(self.config.calendar_backend)
         self._notification_plugin = self.plugin_manager.get_notification_plugin(self.config.notification_backend)
+        self._calendar_generation += 1
+        self._cached_events = []
         self._last_event_fetch_ts = 0.0
 
     def _dispatch_ipc(self, method: str, params: Dict[str, Any]) -> Any:
@@ -292,21 +358,22 @@ class SmartDndDaemon:
             return self.config.to_dict()
         elif method == "save_config":
             new_conf_dict = params.get("config", {})
-            self.config = Config.from_dict(new_conf_dict)
+            new_config = Config.from_dict(new_conf_dict)
+            plugins_changed = (
+                new_config.calendar_backend != self.config.calendar_backend
+                or new_config.notification_backend != self.config.notification_backend
+            )
+            self.config = new_config
             save_config(self.config, self.config_path)
-            self.reload_plugins()
+            if plugins_changed:
+                self.reload_plugins()
             self.tray.set_monochrome(self.config.monochrome_tray_icon)
             self.evaluate()
             return True
         elif method == "evaluate":
             return self.evaluate().to_dict()
         elif method == "toggle_dnd":
-            cur = self._notification_plugin.is_dnd_enabled()
-            self._notification_plugin.set_dnd(not cur)
-            # Manual toggle releases daemon ownership if turning off
-            if cur:
-                self._owned = False
-            return self.evaluate().to_dict()
+            return self.toggle_dnd().to_dict()
         elif method == "list_calendars":
             return [
                 {"uid": c.uid, "name": c.name, "color": c.color, "enabled": c.enabled}

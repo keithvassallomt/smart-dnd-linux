@@ -1,14 +1,15 @@
-# Maintainer: Keith Vassallo
+# Maintainer: Keith Vassallo <keith@vassallo.cloud>
 pkgname=smart-dnd-git
-pkgver=0.1.0.r0
+pkgver=0.1.0.r0.g0000000
 pkgrel=1
 pkgdesc="Automated Do Not Disturb based on schedules and calendar events for Linux desktops"
 arch=('any')
-url="https://github.com/keithvassallomt/smart-dnd"
+url="https://github.com/keithvassallomt/smart-dnd-linux"
 license=('GPL-3.0-or-later')
 depends=(
     'python'
     'python-gobject'
+    'gtk4'
     'libadwaita'
     'evolution-data-server'
 )
@@ -17,7 +18,11 @@ makedepends=(
     'python-build'
     'python-installer'
     'python-hatchling'
-    'python-wheel'
+)
+optdepends=(
+    'caelestia-cli: control Caelestia shell notifications'
+    'swaync: control SwayNotificationCenter'
+    'dunst: control Dunst'
 )
 provides=('smart-dnd')
 conflicts=('smart-dnd')
@@ -26,7 +31,11 @@ sha256sums=('SKIP')
 
 pkgver() {
     cd "${srcdir}/smart-dnd-linux"
-    printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    # v0.2.0-3-gabc1234 -> 0.2.0.r3.gabc1234; before the first tag, r<count>.<hash>
+    ( set -o pipefail
+      git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+      printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    )
 }
 
 build() {
@@ -40,7 +49,9 @@ package() {
 
     install -Dm644 data/com.keithvassallo.SmartDnd.desktop "${pkgdir}/usr/share/applications/com.keithvassallo.SmartDnd.desktop"
     install -Dm644 data/com.keithvassallo.SmartDnd.metainfo.xml "${pkgdir}/usr/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml"
-    install -Dm644 data/smart-dnd.service "${pkgdir}/usr/lib/systemd/user/smart-dnd.service"
+    # Start at login for every user; each user can switch it off in the GUI.
+    install -Dm644 data/smart-dnd-autostart.desktop "${pkgdir}/etc/xdg/autostart/com.keithvassallo.SmartDnd.desktop"
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 
     # Install icons
     install -Dm644 data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg"

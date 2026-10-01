@@ -105,3 +105,30 @@ def test_sni_icon_monochrome_toggle():
     tray.set_monochrome(True)
     assert tray.monochrome is True
     assert tray.icon_name == "com.keithvassallo.SmartDnd-symbolic"
+
+
+def test_find_icon_falls_back_to_xdg_data_dirs(tmp_path, monkeypatch):
+    # Packaged install: no source tree, icons under /usr/share-like data dirs.
+    from smart_dnd.sni import COLOR_ICON_FILES, find_icon_file
+
+    usr = tmp_path / "usr" / "icons" / "hicolor"
+    svg = usr / "scalable" / "apps" / "com.keithvassallo.SmartDnd.svg"
+    svg.parent.mkdir(parents=True)
+    svg.write_text("<svg/>")
+    monkeypatch.setattr("smart_dnd.sni.SOURCE_ICONS_DIR", tmp_path / "missing")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "usr"))
+    assert find_icon_file(COLOR_ICON_FILES) == svg
+
+    # A PNG anywhere beats the SVG, regardless of directory order.
+    png = tmp_path / "home" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
+    png.parent.mkdir(parents=True)
+    png.write_bytes(b"")
+    assert find_icon_file(COLOR_ICON_FILES) == png
+
+
+def test_tooltip_names_the_trigger():
+    tray = StatusNotifierTray(on_toggle_dnd=MagicMock())
+    tray.update_status(Status(active=True, reason="calendar", trigger_name="Team Meeting"))
+    _, _, title, _ = tray._get_tooltip()
+    assert title == "Smart DND (Active • calendar: Team Meeting)"

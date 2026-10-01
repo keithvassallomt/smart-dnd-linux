@@ -6,3 +6,13 @@ __pycache__/
 dist/
 build/
 *.tmp
+
+# Packaging build output
+.flatpak-builder/
+build-flatpak/
+*.flatpak
+packaging/aur/*/src/
+packaging/aur/*/pkg/
+packaging/aur/*/smart-dnd-linux/
+packaging/aur/*/*.pkg.tar.*
+packaging/aur/*/*.tar.gz

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 from smart_dnd.models import CalendarEvent, CalendarSource
 from smart_dnd.plugins.calendar.base import CalendarPlugin

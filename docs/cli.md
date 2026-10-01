@@ -14,6 +14,7 @@ $ smart-dnd status
 === Smart DND Status ===
 DND Active:           YES
 Reason:               calendar
+Trigger:              Team Meeting
 Owned by Smart DND:   YES
 Next Activation:      None
 Next Deactivation:    2026-10-01 15:00:00
@@ -72,6 +73,15 @@ Notification Systems:
 
 GUI Frontends:
   • adwaita: Libadwaita (GNOME HIG)
+```
+
+### `smart-dnd autostart [on|off]`
+Show, or turn on or off, whether the daemon starts at login. The same switch as **General Settings →
+Start at login**.
+
+```bash
+$ smart-dnd autostart off
+Start at login: off
 ```
 
 ### `smart-dnd gui`

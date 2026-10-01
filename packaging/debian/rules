@@ -1,5 +1,8 @@
 #!/usr/bin/make -f
-export PYBUILD_NAME=smart_dnd
+# Install straight into the one binary package.
+export PYBUILD_DESTDIR=debian/smart-dnd
+# The test suite runs in CI; under pybuild it would need the full GTK/EDS stack.
+export PYBUILD_DISABLE=test
 
 %:
 	dh $@ --with python3 --buildsystem=pybuild
@@ -8,6 +11,7 @@ override_dh_auto_install:
 	dh_auto_install
 	install -Dm644 data/com.keithvassallo.SmartDnd.desktop debian/smart-dnd/usr/share/applications/com.keithvassallo.SmartDnd.desktop
 	install -Dm644 data/com.keithvassallo.SmartDnd.metainfo.xml debian/smart-dnd/usr/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml
-	install -Dm644 data/smart-dnd.service debian/smart-dnd/usr/lib/systemd/user/smart-dnd.service
+	# Start at login for every user; each user can switch it off in the GUI.
+	install -Dm644 data/smart-dnd-autostart.desktop debian/smart-dnd/etc/xdg/autostart/com.keithvassallo.SmartDnd.desktop
 	install -Dm644 data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg debian/smart-dnd/usr/share/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg
 	install -Dm644 data/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg debian/smart-dnd/usr/share/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg

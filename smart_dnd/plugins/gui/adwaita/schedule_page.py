@@ -156,6 +156,7 @@ class SchedulePage(Adw.PreferencesPage):
         super().__init__()
         self.config = config
         self.on_save = on_save
+        self._rows: List[ScheduleRow] = []
 
         self.group = Adw.PreferencesGroup(title="Active Schedules")
 
@@ -172,17 +173,22 @@ class SchedulePage(Adw.PreferencesPage):
         self._rebuild()
 
     def _rebuild(self) -> None:
-        # Clear existing rows
-        for child in list(self.group.observe_children()):
-            self.group.remove(child)
+        for row in list(self._rows):
+            self.group.remove(row)
+        self._rows.clear()
 
         for sched in self.config.schedules:
-            row = ScheduleRow(
-                sched,
-                on_change=lambda: self.on_save(self.config),
-                on_delete=self._on_delete_schedule,
-            )
-            self.group.add(row)
+            self._add_row_for_schedule(sched)
+
+    def _add_row_for_schedule(self, sched: Schedule) -> ScheduleRow:
+        row = ScheduleRow(
+            sched,
+            on_change=lambda: self.on_save(self.config),
+            on_delete=self._on_delete_schedule,
+        )
+        self._rows.append(row)
+        self.group.add(row)
+        return row
 
     def _on_add_schedule(self, *args) -> None:
         new_sched = Schedule(
@@ -194,10 +200,15 @@ class SchedulePage(Adw.PreferencesPage):
             enabled=True,
         )
         self.config.schedules.append(new_sched)
+        row = self._add_row_for_schedule(new_sched)
+        row.set_expanded(True)
         self.on_save(self.config)
-        self._rebuild()
 
     def _on_delete_schedule(self, sched: Schedule) -> None:
         self.config.schedules = [s for s in self.config.schedules if s.id != sched.id]
+        for row in list(self._rows):
+            if row.schedule.id == sched.id:
+                self.group.remove(row)
+                self._rows.remove(row)
+                break
         self.on_save(self.config)
-        self._rebuild()

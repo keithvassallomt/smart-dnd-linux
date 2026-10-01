@@ -27,23 +27,23 @@ test-rules:
 plugins:
     . .venv/bin/activate && smart-dnd plugins
 
-# Install smart-dnd to ~/.local/bin and install user desktop, icon, and service files
+# Install smart-dnd editable, plus user desktop, icon and autostart files
 install:
     pip install --break-system-packages -e . || uv tool install --editable .
-    mkdir -p ~/.local/share/applications ~/.local/share/metainfo ~/.config/systemd/user
+    mkdir -p ~/.local/share/applications ~/.local/share/metainfo
     cp data/com.keithvassallo.SmartDnd.desktop ~/.local/share/applications/
     cp data/com.keithvassallo.SmartDnd.metainfo.xml ~/.local/share/metainfo/
-    cp data/smart-dnd.service ~/.config/systemd/user/
     # Install icons
     mkdir -p ~/.local/share/icons/hicolor
     cp -r data/icons/hicolor/* ~/.local/share/icons/hicolor/
     gtk-update-icon-cache -q -t ~/.local/share/icons/hicolor 2>/dev/null || true
-    systemctl --user daemon-reload
-    @echo "Installed Smart DND! Enable with: systemctl --user enable --now smart-dnd"
+    # Start at login, pointing at the smart-dnd just installed
+    smart-dnd autostart on
+    @echo "Installed Smart DND. Open it from your launcher, or run: smart-dnd gui"
 
-# Uninstall user desktop and service files
+# Uninstall user desktop, icon and autostart files
 uninstall:
-    systemctl --user disable --now smart-dnd || true
+    rm -f ~/.config/autostart/com.keithvassallo.SmartDnd.desktop
     rm -f ~/.local/share/applications/com.keithvassallo.SmartDnd.desktop
     rm -f ~/.local/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml
     rm -f ~/.local/share/icons/hicolor/*/apps/com.keithvassallo.SmartDnd.*
@@ -51,13 +51,19 @@ uninstall:
     rm -f ~/.local/share/icons/hicolor/*/actions/smart-dnd-symbolic.*
     rm -f ~/.local/share/icons/hicolor/*/actions/com.keithvassallo.SmartDnd-symbolic.*
     gtk-update-icon-cache -q -t ~/.local/share/icons/hicolor 2>/dev/null || true
-    rm -f ~/.config/systemd/user/smart-dnd.service
-    systemctl --user daemon-reload
 
-# Build Flatpak bundle locally
+# Build and install the Flatpak locally (needs the GNOME SDK named in the manifest)
 build-flatpak:
     flatpak-builder --user --install --force-clean build-flatpak packaging/flatpak/com.keithvassallo.SmartDnd.yaml
 
-# Test AUR PKGBUILD locally (Arch Linux)
+# Build the -git AUR package from main (Arch Linux)
 build-aur:
-    cd packaging/aur && makepkg -sfc
+    cd packaging/aur/smart-dnd-git && makepkg -sfc
+
+# Check the version strings agree; pass the tag you're about to push to check it too
+check-version tag="":
+    python3 packaging/check-version.py {{tag}}
+
+# Run the release workflow as a dry run on GitHub: builds every package, publishes nothing
+release-dry-run ref="main":
+    gh workflow run release.yml --ref {{ref}}

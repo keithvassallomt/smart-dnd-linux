@@ -22,18 +22,29 @@ Smart DND monitors your schedule and calendar events, automatically turning Do N
 
 ### 1. Installation
 
-Clone and install editable mode with `just`:
+**Flatpak** from [FriendlyHub](https://friendlyhub.org):
+```bash
+flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
+flatpak install friendlyhub com.keithvassallo.SmartDnd
+```
+
+**Arch Linux** from the AUR: `smart-dnd` (latest release) or `smart-dnd-git` (latest `main`).
+
+**Debian, Ubuntu and Fedora**: download the `.deb` or `.rpm` from the
+[latest release](https://github.com/keithvassallomt/smart-dnd-linux/releases/latest).
+
+**From source**, as an editable install with `just`:
 ```bash
 git clone https://github.com/keithvassallomt/smart-dnd-linux.git
 cd smart-dnd-linux
 just install
 ```
 
-### 2. Enable User Daemon
+### 2. Start at Login
 
-```bash
-systemctl --user enable --now smart-dnd.service
-```
+Packaged installs start the daemon at every login by default, and the Flatpak does after its first
+launch. Change it in **General Settings → Start at login**, or with `smart-dnd autostart on|off`.
+See [Start at Login](desktop-integration.md#1-start-at-login).
 
 ### 3. Open Preferences GUI
 
@@ -50,4 +61,5 @@ smart-dnd gui
 - [Plugin Development Guide](plugin-guide.md)
 - [Configuration Reference](configuration.md)
 - [CLI Reference](cli.md)
-- [Systemd & Desktop Integration](systemd.md)
+- [Desktop Integration & Start at Login](desktop-integration.md)
+- [Releasing](releasing.md)

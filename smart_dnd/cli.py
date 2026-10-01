@@ -12,6 +12,8 @@ from typing import Optional
 
 from smart_dnd.config import load_config
 from smart_dnd.daemon import SmartDndDaemon
+from smart_dnd import autostart
+from smart_dnd.host import IN_FLATPAK, start_daemon_detached
 from smart_dnd.ipc import SmartDndClient
 from smart_dnd.models import Config, Status
 from smart_dnd.plugins.manager import PluginManager
@@ -32,8 +34,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     client = get_client()
     if not client.is_daemon_running():
         print("Smart DND daemon is NOT running.")
-        print("Run 'smart-dnd daemon' or enable the systemd service with:")
-        print("  systemctl --user enable --now smart-dnd")
+        print("Start it with 'smart-dnd daemon', or have it start at every login with:")
+        print("  smart-dnd autostart on")
         return 1
 
     try:
@@ -41,6 +43,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("=== Smart DND Status ===")
         print(f"DND Active:           {'YES' if status.active else 'NO'}")
         print(f"Reason:               {status.reason}")
+        print(f"Trigger:              {status.trigger_name or '-'}")
         print(f"Owned by Smart DND:   {'YES' if status.owned else 'NO'}")
         print(f"Next Activation:      {format_ms(status.next_on_ms)}")
         print(f"Next Deactivation:    {format_ms(status.next_off_ms)}")
@@ -55,8 +58,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 def cmd_toggle(args: argparse.Namespace) -> int:
     client = get_client()
     if client.is_daemon_running():
-        res = client.toggle_dnd()
-        status = client.get_status()
+        status = client.toggle_dnd()
         print(f"DND toggled. Now: {'ACTIVE' if status.active else 'INACTIVE'}")
         return 0
 
@@ -79,6 +81,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
     if not client.is_daemon_running():
         print("Daemon is not running. Launching single in-process evaluation...")
         daemon = SmartDndDaemon(config_path=args.config)
+        # No main loop here, so the daemon's background calendar refresh would never land.
+        daemon.refresh_events_blocking()
         status = daemon.evaluate()
     else:
         status = client.evaluate()
@@ -104,6 +108,17 @@ def cmd_list_calendars(args: argparse.Namespace) -> int:
     print(f"Found {len(calendars)} calendar sources:")
     for c in calendars:
         print(f" • {c.name} (uid: {c.uid})")
+    return 0
+
+
+def cmd_autostart(args: argparse.Namespace) -> int:
+    if args.state:
+        try:
+            autostart.set_enabled(args.state == "on")
+        except Exception as e:
+            print(f"Failed to change start at login: {e}", file=sys.stderr)
+            return 1
+    print(f"Start at login: {'on' if autostart.is_enabled() else 'off'}")
     return 0
 
 
@@ -189,10 +204,24 @@ def cmd_daemon(args: argparse.Namespace) -> int:
         return 1
 
 
+def _ensure_daemon_running(client: SmartDndClient) -> None:
+    """Start the daemon if needed: the GUI is useless without it, and after a fresh
+    install nothing else starts it until the next login."""
+    if client.is_daemon_running():
+        return
+    start_daemon_detached()
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not client.is_daemon_running():
+        time.sleep(0.05)
+
+
 def cmd_gui(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     client = get_client()
     pm = PluginManager()
+    if IN_FLATPAK:
+        autostart.enable_by_default_once()
+    _ensure_daemon_running(client)
 
     gui_backend = config.gui_backend or "adwaita"
     try:
@@ -247,6 +276,10 @@ def main() -> None:
     # plugins
     subparsers.add_parser("plugins", help="List all discovered plugins")
 
+    # autostart
+    p_autostart = subparsers.add_parser("autostart", help="Show or set whether the daemon starts at login")
+    p_autostart.add_argument("state", nargs="?", choices=["on", "off"], help="Turn start at login on or off")
+
     # test
     subparsers.add_parser("test", help="Dry-run evaluation of rules against upcoming events")
 
@@ -267,6 +300,7 @@ def main() -> None:
         "list-calendars": cmd_list_calendars,
         "plugins": cmd_plugins,
         "test": cmd_test_rules,
+        "autostart": cmd_autostart,
     }
 
     cmd_fn = commands.get(args.command)

@@ -8,7 +8,7 @@ import inspect
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Type
+from typing import Any, Dict, List, Type
 
 from smart_dnd.plugins.calendar.base import CalendarPlugin
 from smart_dnd.plugins.gui.base import GuiPlugin

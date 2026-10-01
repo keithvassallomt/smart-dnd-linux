@@ -129,7 +129,7 @@ class Config:
         return cls(
             master_enabled=bool(data.get("master_enabled", True)),
             ignore_all_day=bool(data.get("ignore_all_day", True)),
-            calendar_backend=str(data.get("calendar_backend", "caelestia" if "caelestia" in data.get("calendar_backend", "") else data.get("calendar_backend", "evolution"))),
+            calendar_backend=str(data.get("calendar_backend", "evolution")),
             notification_backend=str(data.get("notification_backend", "caelestia")),
             gui_backend=str(data.get("gui_backend", "adwaita")),
             monochrome_tray_icon=bool(monochrome),

@@ -192,6 +192,7 @@ class CalendarPage(Adw.PreferencesPage):
         self.calendars = calendars
         self.events = events
         self.on_save = on_save
+        self._rows: List[CalendarRuleRow] = []
 
         self.group = Adw.PreferencesGroup(title="Calendar Matching Rules")
 
@@ -207,25 +208,36 @@ class CalendarPage(Adw.PreferencesPage):
 
         self._rebuild()
 
+    def set_calendar_data(self, calendars: List[CalendarSource], events: List[CalendarEvent]) -> None:
+        self.calendars = calendars
+        self.events = events
+        self._rebuild()
+
     def _rebuild(self) -> None:
-        for child in list(self.group.observe_children()):
-            self.group.remove(child)
+        for row in list(self._rows):
+            self.group.remove(row)
+        self._rows.clear()
 
         for rule in self.config.calendar_rules:
-            row = CalendarRuleRow(
-                rule,
-                self.calendars,
-                self.events,
-                self.config,
-                on_change=lambda: self.on_save(self.config),
-                on_delete=self._on_delete_rule,
-            )
-            self.group.add(row)
+            self._add_row_for_rule(rule)
+
+    def _add_row_for_rule(self, rule: CalendarRule) -> CalendarRuleRow:
+        row = CalendarRuleRow(
+            rule,
+            self.calendars,
+            self.events,
+            self.config,
+            on_change=lambda: self.on_save(self.config),
+            on_delete=self._on_delete_rule,
+        )
+        self._rows.append(row)
+        self.group.add(row)
+        return row
 
     def _on_add_rule(self, *args) -> None:
         new_rule = CalendarRule(
             id=str(uuid.uuid4())[:8],
-            name="Rule",
+            name="New Rule",
             match_type="contains",
             pattern="",
             calendars=[],
@@ -234,10 +246,15 @@ class CalendarPage(Adw.PreferencesPage):
             enabled=True,
         )
         self.config.calendar_rules.append(new_rule)
+        row = self._add_row_for_rule(new_rule)
+        row.set_expanded(True)
         self.on_save(self.config)
-        self._rebuild()
 
     def _on_delete_rule(self, rule: CalendarRule) -> None:
         self.config.calendar_rules = [r for r in self.config.calendar_rules if r.id != rule.id]
+        for row in list(self._rows):
+            if row.rule.id == rule.id:
+                self.group.remove(row)
+                self._rows.remove(row)
+                break
         self.on_save(self.config)
-        self._rebuild()

@@ -51,6 +51,8 @@ class IpcServer:
         return self._server_sock
 
     def handle_client(self, client_sock: socket.socket) -> None:
+        # Runs on the daemon's main loop: a client that connects and stalls must not hang it.
+        client_sock.settimeout(2.0)
         try:
             data = b""
             while True:
@@ -143,8 +145,9 @@ class SmartDndClient:
         res = self.call("evaluate")
         return Status(**res)
 
-    def toggle_dnd(self) -> bool:
-        return bool(self.call("toggle_dnd"))
+    def toggle_dnd(self) -> Status:
+        res = self.call("toggle_dnd")
+        return Status(**res)
 
     def list_calendars(self) -> List[CalendarSource]:
         res = self.call("list_calendars")

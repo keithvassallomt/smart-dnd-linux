@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 
+from smart_dnd.host import host_argv, which_host
 from smart_dnd.plugins.notifications.base import NotificationPlugin
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class CaelestiaNotificationPlugin(NotificationPlugin):
     description = "Controls Do Not Disturb via Caelestia's Quickshell IPC."
 
     def __init__(self) -> None:
-        self._bin = shutil.which("caelestia")
+        self._bin = which_host("caelestia")
         if not self._bin:
             logger.warning("Caelestia binary not found in PATH.")
 
@@ -28,7 +28,7 @@ class CaelestiaNotificationPlugin(NotificationPlugin):
             return False
         try:
             res = subprocess.run(
-                [self._bin, "shell", "notifs", "isDndEnabled"],
+                host_argv([self._bin, "shell", "notifs", "isDndEnabled"]),
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -44,7 +44,7 @@ class CaelestiaNotificationPlugin(NotificationPlugin):
         cmd = "enableDnd" if enabled else "disableDnd"
         try:
             subprocess.run(
-                [self._bin, "shell", "notifs", cmd],
+                host_argv([self._bin, "shell", "notifs", cmd]),
                 capture_output=True,
                 text=True,
                 check=True,

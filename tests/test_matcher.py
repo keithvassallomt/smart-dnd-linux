@@ -1,6 +1,7 @@
 """Tests for calendar rule matching logic mirroring smart-dnd test suite."""
 
 from smart_dnd.matcher import (
+    active_match_at,
     calendar_next_transition,
     next_enable,
     rules_active_at,
@@ -102,3 +103,9 @@ def test_next_enable():
     r = make_rule()
     assert next_enable([r], [ev], 500.0 * S, ignore_all_day=True) == 1000.0 * S
     assert next_enable([r], [ev], 1000.0 * S, ignore_all_day=True) is None
+
+
+def test_active_match_at_returns_rule_and_event():
+    r = make_rule(name="Meetings")
+    assert active_match_at([r], [ev], 2000.0 * S, ignore_all_day=True) == (r, ev)
+    assert active_match_at([r], [ev], 5000.0 * S, ignore_all_day=True) is None

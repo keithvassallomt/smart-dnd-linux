@@ -4,6 +4,10 @@
   <img src="data/smart-dnd.svg" width="120" alt="Smart DND logo">
 </p>
 
+> [!NOTE]
+> This is the **full** version of Smart DND. It is built to support various desktop environments, notification systems and calendar backends. If you're using GNOME, and have added your calendar to GNOME Online Accounts, see the
+> [Smart DND GNOME Extension](https://github.com/keithvassallomt/smart-dnd).
+
 Smart Do Not Disturb (DND) automation for Linux desktops (Hyprland, Caelestia, Sway, GNOME, etc.).
 
 Automatically toggles Do Not Disturb:
@@ -19,7 +23,7 @@ Automatically toggles Do Not Disturb:
 
 Smart DND is built with a pluggable architecture:
 - **Calendar Providers**:
-  - `evolution`: Evolution Data Server (`ECal 2.0`) — connects directly to Google Calendar, GNOME Online Accounts, Nextcloud, CalDAV, and local calendars.
+  - `evolution`: Evolution Data Server (`ECal 2.0`): connects directly to Google Calendar, GNOME Online Accounts, Nextcloud, CalDAV, and local calendars.
   - Drop-in custom plugins via `~/.config/smart-dnd/plugins/calendar/`.
 - **Notification Systems**:
   - `caelestia`: Direct IPC to Caelestia Quickshell desktop.
@@ -32,7 +36,18 @@ Smart DND is built with a pluggable architecture:
 
 > Built a plugin for your desktop or notification setup? We'd love to have it officially included! See the [Plugin Development Guide](docs/plugin-guide.md#5-contributing-your-plugin-upstream) for details on submitting a Pull Request.
 
-## Installation & Usage
+## Installation
+
+- **Flatpak** from [FriendlyHub](https://friendlyhub.org):
+  ```bash
+  flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
+  flatpak install friendlyhub com.keithvassallo.SmartDnd
+  ```
+- **Arch Linux** (AUR): `smart-dnd`, or `smart-dnd-git` for the latest `main`.
+- **Debian, Ubuntu, Fedora**: `.deb` and `.rpm` on the [releases page](https://github.com/keithvassallomt/smart-dnd-linux/releases/latest).
+- **From source**: `just install` (see [Quick Start](docs/index.md#quick-start)).
+
+## Usage
 
 ```bash
 # Run the daemon
@@ -51,9 +66,8 @@ smart-dnd test
 smart-dnd plugins
 ```
 
-## Systemd Service
+## Start at Login
 
-Enable the user service:
-```bash
-systemctl --user enable --now smart-dnd.service
-```
+The daemon starts at every login by default (the Flatpak after its first launch). Turn it off or
+on in **General Settings → Start at login**, or with `smart-dnd autostart on|off`. Details in
+[Desktop Integration](docs/desktop-integration.md#1-start-at-login).

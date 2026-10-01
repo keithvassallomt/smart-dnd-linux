@@ -4,17 +4,15 @@ Release:        1%{?dist}
 Summary:        Automated Do Not Disturb based on schedules and calendar events
 
 License:        GPL-3.0-or-later
-URL:            https://github.com/keithvassallomt/smart-dnd
+URL:            https://github.com/keithvassallomt/smart-dnd-linux
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 
 BuildRequires:  python3-devel
-BuildRequires:  python3-build
-BuildRequires:  python3-installer
+BuildRequires:  pyproject-rpm-macros
+BuildRequires:  python3-pip
 BuildRequires:  python3-hatchling
-BuildRequires:  python3-wheel
-BuildRequires:  systemd-rpm-macros
 
 Requires:       python3
 Requires:       python3-gobject
@@ -34,11 +32,13 @@ GUI, system tray integration, and pluggable backends.
 
 %install
 %pyproject_install
-%pyproject_save_files smart_dnd
+# -l: LICENSE ships in the wheel's dist-info and is marked %%license
+%pyproject_save_files -l smart_dnd
 
 install -Dm644 data/com.keithvassallo.SmartDnd.desktop %{buildroot}%{_datadir}/applications/com.keithvassallo.SmartDnd.desktop
 install -Dm644 data/com.keithvassallo.SmartDnd.metainfo.xml %{buildroot}%{_metainfodir}/com.keithvassallo.SmartDnd.metainfo.xml
-install -Dm644 data/smart-dnd.service %{buildroot}%{_userunitdir}/smart-dnd.service
+# Start at login for every user; each user can switch it off in the GUI.
+install -Dm644 data/smart-dnd-autostart.desktop %{buildroot}%{_sysconfdir}/xdg/autostart/com.keithvassallo.SmartDnd.desktop
 
 install -Dm644 data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg
 install -Dm644 data/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg
@@ -54,9 +54,9 @@ done
 %{_bindir}/smart-dnd-daemon
 %{_datadir}/applications/com.keithvassallo.SmartDnd.desktop
 %{_metainfodir}/com.keithvassallo.SmartDnd.metainfo.xml
-%{_userunitdir}/smart-dnd.service
-%{_datadir}/icons/hicolor/*/apps/com.keithvassallo.SmartDnd.*
+%config(noreplace) %{_sysconfdir}/xdg/autostart/com.keithvassallo.SmartDnd.desktop
+%{_datadir}/icons/hicolor/*/apps/com.keithvassallo.SmartDnd*
 
 %changelog
-* Thu Oct 01 2026 Keith Vassallo <keith@keithvassallo.com> - 0.1.0-1
+* Thu Oct 01 2026 Keith Vassallo <keith@vassallo.cloud> - 0.1.0-1
 - Initial release of Smart DND for Linux.

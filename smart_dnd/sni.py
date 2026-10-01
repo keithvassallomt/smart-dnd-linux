@@ -6,8 +6,9 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import gi
 gi.require_version("Gio", "2.0")
@@ -19,6 +20,20 @@ from smart_dnd.format import format_when
 from smart_dnd.models import Status
 
 logger = logging.getLogger(__name__)
+
+WATCHER_NAME = "org.kde.StatusNotifierWatcher"
+
+# Only present in a checkout or editable install; the wheel ships smart_dnd/ alone.
+SOURCE_ICONS_DIR = Path(__file__).resolve().parents[1] / "data" / "icons" / "hicolor"
+
+COLOR_ICON_FILES = (
+    "32x32/apps/com.keithvassallo.SmartDnd.png",
+    "scalable/apps/com.keithvassallo.SmartDnd.svg",
+)
+SYMBOLIC_ICON_FILES = (
+    "symbolic/apps/com.keithvassallo.SmartDnd-symbolic.png",
+    "symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg",
+)
 
 SNI_XML = """
 <node>
@@ -115,9 +130,35 @@ DBUSMENU_XML = """
 """
 
 
+def icon_search_dirs() -> List[Path]:
+    """hicolor directories to search: the source tree, then the XDG data dirs.
+
+    Distro packages install icons under /usr/share and the Flatpak under /app/share,
+    both of which are on $XDG_DATA_DIRS.
+    """
+    data_home = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    data_dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    dirs = [SOURCE_ICONS_DIR]
+    for d in [data_home, *data_dirs.split(":")]:
+        if d:
+            dirs.append(Path(d) / "icons" / "hicolor")
+    return dirs
+
+
+def find_icon_file(candidates: Sequence[str]) -> Optional[Path]:
+    """Return the first candidate (in order of preference) found in any icon directory."""
+    dirs = icon_search_dirs()
+    for rel in candidates:
+        for base in dirs:
+            path = base / rel
+            if path.is_file():
+                return path
+    return None
+
+
 def ensure_icons_installed() -> None:
     """Ensure icons exist in ~/.local/share/icons/hicolor so compositors find them."""
-    icons_src = Path(__file__).resolve().parents[1] / "data" / "icons" / "hicolor"
+    icons_src = SOURCE_ICONS_DIR
     icons_dst = Path.home() / ".local" / "share" / "icons" / "hicolor"
 
     if not icons_src.exists():
@@ -205,7 +246,9 @@ def toggle_gui() -> None:
 
     try:
         logger.info("Launching Smart DND GUI...")
-        subprocess.Popen(["smart-dnd", "gui"])
+        # Use the daemon's own interpreter: under systemd, PATH may not include
+        # ~/.local/bin or a venv, so a bare "smart-dnd" is not reliably found.
+        subprocess.Popen([sys.executable, "-m", "smart_dnd.cli", "gui"])
     except Exception as e:
         logger.error("Failed launching GUI from tray: %s", e)
 
@@ -232,21 +275,20 @@ class StatusNotifierTray:
         self._bus: Optional[Gio.DBusConnection] = None
         self._reg_id: int = 0
         self._menu_reg_id: int = 0
+        self._name_owner_id: int = 0
+        self._watcher_watch_id: int = 0
         self._menu_revision: int = 1
 
-        self._repo_root = Path(__file__).resolve().parents[1]
         self._icon_theme_path = str(Path.home() / ".local" / "share" / "icons")
 
         self._reload_pixmap()
 
     def _reload_pixmap(self) -> None:
-        if self.monochrome:
-            png_path = self._repo_root / "data" / "icons" / "hicolor" / "symbolic" / "apps" / "com.keithvassallo.SmartDnd-symbolic.png"
-            if not png_path.exists():
-                png_path = self._repo_root / "data" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
-        else:
-            png_path = self._repo_root / "data" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
-        self._normal_pixmap = load_icon_pixmap(png_path, 24)
+        candidates = SYMBOLIC_ICON_FILES + COLOR_ICON_FILES if self.monochrome else COLOR_ICON_FILES
+        icon_path = find_icon_file(candidates)
+        if icon_path is None:
+            logger.debug("No tray icon file found; hosts will fall back to IconName lookup")
+        self._normal_pixmap = load_icon_pixmap(icon_path, 24) if icon_path else None
 
     def set_monochrome(self, monochrome: bool) -> None:
         if self.monochrome == monochrome:
@@ -298,32 +340,52 @@ class StatusNotifierTray:
                 None,
             )
 
-            # Register with StatusNotifierWatcher
-            self._register_with_watcher()
+            # The spec's well-known name; some hosts discover items by it.
+            self._name_owner_id = Gio.bus_own_name_on_connection(
+                self._bus,
+                f"org.kde.StatusNotifierItem-{os.getpid()}-1",
+                Gio.BusNameOwnerFlags.NONE,
+                None,
+                None,
+            )
+
+            # Register now, and again whenever the watcher restarts (e.g. the shell
+            # reloads). Otherwise the icon vanishes until the daemon restarts.
+            self._watcher_watch_id = Gio.bus_watch_name_on_connection(
+                self._bus,
+                WATCHER_NAME,
+                Gio.BusNameWatcherFlags.NONE,
+                self._on_watcher_appeared,
+                None,
+            )
             logger.info("StatusNotifierItem and DBusMenu registered on Session Bus")
         except Exception as e:
             logger.warning("Could not initialize StatusNotifierItem: %s", e)
 
+    def _on_watcher_appeared(self, connection: Gio.DBusConnection, name: str, owner: str) -> None:
+        self._register_with_watcher()
+
     def _register_with_watcher(self) -> None:
         if not self._bus:
             return
+        # Async: a hung watcher must not block the daemon's main loop.
+        self._bus.call(
+            WATCHER_NAME,
+            "/StatusNotifierWatcher",
+            WATCHER_NAME,
+            "RegisterStatusNotifierItem",
+            GLib.Variant("(s)", ("/StatusNotifierItem",)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            self._on_registered,
+        )
+
+    def _on_registered(self, bus: Gio.DBusConnection, result: Gio.AsyncResult, *args: Any) -> None:
         try:
-            watcher = Gio.DBusProxy.new_sync(
-                self._bus,
-                Gio.DBusProxyFlags.NONE,
-                None,
-                "org.kde.StatusNotifierWatcher",
-                "/StatusNotifierWatcher",
-                "org.kde.StatusNotifierWatcher",
-                None,
-            )
-            watcher.call_sync(
-                "RegisterStatusNotifierItem",
-                GLib.Variant("(s)", ("/StatusNotifierItem",)),
-                Gio.DBusCallFlags.NONE,
-                -1,
-                None,
-            )
+            bus.call_finish(result)
+            logger.debug("Registered with %s", WATCHER_NAME)
         except Exception as e:
             logger.debug("StatusNotifierWatcher registration notice: %s", e)
 
@@ -378,7 +440,10 @@ class StatusNotifierTray:
         now_ms = time.time() * 1000.0
 
         if self.status.active:
-            title = f"Smart DND (Active • {self.status.reason})"
+            if self.status.trigger_name:
+                title = f"Smart DND (Active • {self.status.reason}: {self.status.trigger_name})"
+            else:
+                title = f"Smart DND (Active • {self.status.reason})"
             if self.status.next_off_ms:
                 desc = f"DND is ON. Next transition: {format_when(now_ms, self.status.next_off_ms)}"
             else:
@@ -629,6 +694,12 @@ class StatusNotifierTray:
             invocation.return_value(None)
 
     def stop(self) -> None:
+        if self._watcher_watch_id:
+            Gio.bus_unwatch_name(self._watcher_watch_id)
+            self._watcher_watch_id = 0
+        if self._name_owner_id:
+            Gio.bus_unown_name(self._name_owner_id)
+            self._name_owner_id = 0
         if self._bus:
             if self._reg_id:
                 try:

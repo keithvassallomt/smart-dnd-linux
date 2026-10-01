@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Smart DND
+Comment=Turns Do Not Disturb on and off in the background
+Exec=smart-dnd daemon
+Icon=com.keithvassallo.SmartDnd
+NoDisplay=true

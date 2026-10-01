@@ -73,6 +73,22 @@ class MakoNotificationPlugin(NotificationPlugin):
         return True
 ```
 
+### Shelling out, and the Flatpak sandbox
+
+Inside the Flatpak, host tools such as `makoctl` don't exist. Wrap commands with
+`smart_dnd.host.host_argv`, which runs them on the host through `flatpak-spawn --host` when
+sandboxed and leaves them unchanged otherwise, and find binaries with `which_host` instead of
+`shutil.which`:
+
+```python
+from smart_dnd.host import host_argv, which_host
+
+makoctl = which_host("makoctl")
+subprocess.run(host_argv([makoctl, "mode"]), capture_output=True, text=True)
+```
+
+Drop-in plugins for the Flatpak go in `~/.var/app/com.keithvassallo.SmartDnd/config/smart-dnd/plugins/`.
+
 ---
 
 ## 3. Writing a GUI Frontend Plugin

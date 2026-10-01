@@ -71,9 +71,14 @@ def schedule_active_at(schedule: Schedule, dow: int, minutes: int) -> bool:
     return head or tail
 
 
+def first_active_at(schedules: List[Schedule], dow: int, minutes: int) -> Optional[Schedule]:
+    """Return the first enabled schedule active at dow and minute, if any."""
+    return next((s for s in schedules if schedule_active_at(s, dow, minutes)), None)
+
+
 def any_active_at(schedules: List[Schedule], dow: int, minutes: int) -> bool:
     """Return True if any enabled schedule is active at dow and minute."""
-    return any(schedule_active_at(s, dow, minutes) for s in schedules)
+    return first_active_at(schedules, dow, minutes) is not None
 
 
 def next_transition(schedules: List[Schedule], now_ms: float) -> Optional[float]:

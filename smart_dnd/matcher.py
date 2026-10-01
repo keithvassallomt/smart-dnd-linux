@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from smart_dnd.models import CalendarEvent, CalendarRule
 
@@ -47,13 +47,12 @@ def event_window(rule: CalendarRule, event: CalendarEvent) -> Dict[str, float]:
     }
 
 
-def matching_windows(
+def _matches(
     rules: List[CalendarRule],
     events: List[CalendarEvent],
     ignore_all_day: bool,
-) -> List[Dict[str, float]]:
-    """Return all active time windows from matching rules and events."""
-    windows: List[Dict[str, float]] = []
+) -> Iterator[Tuple[CalendarRule, CalendarEvent]]:
+    """Yield every (rule, event) pair where the rule applies to the event."""
     for rule in rules:
         if not rule.enabled:
             continue
@@ -64,8 +63,30 @@ def matching_windows(
                 continue
             if not title_matches(rule, ev.summary):
                 continue
-            windows.append(event_window(rule, ev))
-    return windows
+            yield rule, ev
+
+
+def matching_windows(
+    rules: List[CalendarRule],
+    events: List[CalendarEvent],
+    ignore_all_day: bool,
+) -> List[Dict[str, float]]:
+    """Return all active time windows from matching rules and events."""
+    return [event_window(rule, ev) for rule, ev in _matches(rules, events, ignore_all_day)]
+
+
+def active_match_at(
+    rules: List[CalendarRule],
+    events: List[CalendarEvent],
+    now_ms: float,
+    ignore_all_day: bool,
+) -> Optional[Tuple[CalendarRule, CalendarEvent]]:
+    """Return the first (rule, event) pair whose window contains now_ms, if any."""
+    for rule, ev in _matches(rules, events, ignore_all_day):
+        w = event_window(rule, ev)
+        if w["on"] <= now_ms < w["off"]:
+            return rule, ev
+    return None
 
 
 def rules_active_at(
@@ -75,7 +96,7 @@ def rules_active_at(
     ignore_all_day: bool,
 ) -> bool:
     """Return True if any calendar rule is currently active."""
-    return any(w["on"] <= now_ms < w["off"] for w in matching_windows(rules, events, ignore_all_day))
+    return active_match_at(rules, events, now_ms, ignore_all_day) is not None
 
 
 def calendar_next_transition(

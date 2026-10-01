@@ -20,10 +20,13 @@ class GeneralSettingsDialog(Adw.PreferencesDialog):
         config: Config,
         available_plugins: dict[str, List[str]],
         on_save: Callable[[Config], None],
+        autostart_enabled: bool,
+        on_autostart: Callable[[bool], None],
     ) -> None:
         super().__init__(title="General Settings")
         self.config = config
         self.on_save = on_save
+        self.on_autostart = on_autostart
 
         page = Adw.PreferencesPage()
         self.add(page)
@@ -48,6 +51,17 @@ class GeneralSettingsDialog(Adw.PreferencesDialog):
         self.allday_switch.connect("notify::active", self._on_changed)
         auto_group.add(self.allday_switch)
 
+        # Not part of config.json: it's an autostart entry in ~/.config/autostart.
+        self.autostart_switch = Adw.SwitchRow(
+            title="Start at login",
+            subtitle="Run Smart DND in the background whenever you log in",
+            active=autostart_enabled,
+        )
+        self.autostart_switch.connect(
+            "notify::active", lambda row, _pspec: self.on_autostart(row.get_active())
+        )
+        auto_group.add(self.autostart_switch)
+
         # 2. Plugins group
         plugin_group = Adw.PreferencesGroup(
             title="Active Plugins",
@@ -55,31 +69,31 @@ class GeneralSettingsDialog(Adw.PreferencesDialog):
         )
         page.add(plugin_group)
 
+        # Combo indices map onto these copies; the caller's lists are left untouched.
+        self._notif_items = list(available_plugins.get("notifications", ["caelestia"]))
+        if config.notification_backend not in self._notif_items:
+            self._notif_items.append(config.notification_backend)
+        self._cal_items = list(available_plugins.get("calendar", ["evolution"]))
+        if config.calendar_backend not in self._cal_items:
+            self._cal_items.append(config.calendar_backend)
+
         # Notification backend
-        notif_plugins = available_plugins.get("notifications", ["caelestia"])
-        if config.notification_backend not in notif_plugins:
-            notif_plugins.append(config.notification_backend)
         self.notif_combo = Adw.ComboRow(
             title="Notification System",
             subtitle="Desktop environment or daemon to control",
-            model=Gtk.StringList.new(notif_plugins),
+            model=Gtk.StringList.new(self._notif_items),
         )
-        if config.notification_backend in notif_plugins:
-            self.notif_combo.set_selected(notif_plugins.index(config.notification_backend))
+        self.notif_combo.set_selected(self._notif_items.index(config.notification_backend))
         self.notif_combo.connect("notify::selected", self._on_changed)
         plugin_group.add(self.notif_combo)
 
         # Calendar backend
-        cal_plugins = available_plugins.get("calendar", ["evolution"])
-        if config.calendar_backend not in cal_plugins:
-            cal_plugins.append(config.calendar_backend)
         self.cal_combo = Adw.ComboRow(
             title="Calendar Backend",
             subtitle="Source provider for calendar events",
-            model=Gtk.StringList.new(cal_plugins),
+            model=Gtk.StringList.new(self._cal_items),
         )
-        if config.calendar_backend in cal_plugins:
-            self.cal_combo.set_selected(cal_plugins.index(config.calendar_backend))
+        self.cal_combo.set_selected(self._cal_items.index(config.calendar_backend))
         self.cal_combo.connect("notify::selected", self._on_changed)
         plugin_group.add(self.cal_combo)
 
@@ -98,19 +112,15 @@ class GeneralSettingsDialog(Adw.PreferencesDialog):
         self.monochrome_switch.connect("notify::active", self._on_changed)
         tray_group.add(self.monochrome_switch)
 
-        self.available_plugins = available_plugins
-
     def _on_changed(self, *args) -> None:
         self.config.master_enabled = self.master_switch.get_active()
         self.config.ignore_all_day = self.allday_switch.get_active()
         self.config.monochrome_tray_icon = self.monochrome_switch.get_active()
 
-        notif_items = self.available_plugins.get("notifications", ["caelestia"])
-        if self.notif_combo.get_selected() < len(notif_items):
-            self.config.notification_backend = notif_items[self.notif_combo.get_selected()]
+        if self.notif_combo.get_selected() < len(self._notif_items):
+            self.config.notification_backend = self._notif_items[self.notif_combo.get_selected()]
 
-        cal_items = self.available_plugins.get("calendar", ["evolution"])
-        if self.cal_combo.get_selected() < len(cal_items):
-            self.config.calendar_backend = cal_items[self.cal_combo.get_selected()]
+        if self.cal_combo.get_selected() < len(self._cal_items):
+            self.config.calendar_backend = self._cal_items[self.cal_combo.get_selected()]
 
         self.on_save(self.config)

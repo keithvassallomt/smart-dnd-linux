@@ -4,6 +4,7 @@ import datetime
 from smart_dnd.models import Schedule
 from smart_dnd.scheduler import (
     any_active_at,
+    first_active_at,
     next_start,
     next_transition,
     schedule_active_at,
@@ -95,3 +96,9 @@ def test_next_start_rolls_to_next_matching_day():
     res = next_start([sched], now_ms)
     expected = datetime.datetime(2026, 7, 9, 22, 0).astimezone().timestamp() * 1000.0
     assert res == expected
+
+
+def test_first_active_at_returns_the_matching_schedule():
+    assert first_active_at([daytime, weeknights], 1, to_minutes("23:00")) is weeknights
+    assert first_active_at([daytime, weeknights], 3, to_minutes("12:00")) is daytime
+    assert first_active_at([daytime, weeknights], 0, to_minutes("12:00")) is None

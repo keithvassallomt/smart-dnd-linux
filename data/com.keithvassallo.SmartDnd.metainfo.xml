@@ -21,11 +21,17 @@
     </ul>
   </description>
   <launchable type="desktop-id">com.keithvassallo.SmartDnd.desktop</launchable>
-  <url type="homepage">https://github.com/keithvassallomt/smart-dnd</url>
-  <url type="bugtracker">https://github.com/keithvassallomt/smart-dnd/issues</url>
-  <developer_name>Keith Vassallo</developer_name>
+  <url type="homepage">https://github.com/keithvassallomt/smart-dnd-linux</url>
+  <url type="bugtracker">https://github.com/keithvassallomt/smart-dnd-linux/issues</url>
+  <developer id="com.keithvassallo">
+    <name>Keith Vassallo</name>
+  </developer>
   <releases>
-    <release version="0.1.0" date="2026-10-01"/>
+    <release version="0.1.0" date="2026-10-01">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
   </releases>
   <content_rating type="oars-1.1"/>
 </component>

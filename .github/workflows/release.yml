@@ -1,123 +1,235 @@
-name: Release & Distribution Packages
+name: Release
 
 on:
   push:
     tags:
       - 'v*'
+  # Dry run from the Actions tab: builds and tests every package, publishes nothing.
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-python:
-    name: Build Python Wheels & Sdist
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        name: Check version strings agree (and match the tag)
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=$(python3 packaging/check-version.py "$GITHUB_REF_NAME")
+          else
+            version=$(python3 packaging/check-version.py)
+          fi
+          publish=false
+          if [ "$GITHUB_EVENT_NAME" = push ]; then publish=true; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Version $version (publish: $publish)"
+
+  python:
+    name: Wheel and sdist
+    needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
-      - name: Build Wheel and Sdist
+          python-version: '3.x'
+      - name: Build
         run: |
-          pip install build hatchling
+          python -m pip install build
           python -m build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
 
-  build-deb:
-    name: Build Debian / Ubuntu Package (.deb)
+  deb:
+    name: Debian / Ubuntu package
+    needs: version
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Packaging Dependencies
+      - uses: actions/checkout@v7
+      - name: Install packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debhelper dh-python python3-all python3-hatchling python3-build python3-installer python3-wheel
-      - name: Build DEB
+          sudo apt-get install -y debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
+      - name: Build .deb
         run: |
+          cp -r packaging/debian debian
+          sed -i "1s/([^)]*)/($VERSION-1)/" debian/changelog
           dpkg-buildpackage -us -uc -b
           mkdir -p deb-dist
           mv ../smart-dnd_*.deb deb-dist/
-      - uses: actions/upload-artifact@v4
+      - name: Install and smoke-test
+        run: |
+          sudo apt-get install -y ./deb-dist/*.deb
+          smart-dnd plugins
+          test -f /etc/xdg/autostart/com.keithvassallo.SmartDnd.desktop
+      - uses: actions/upload-artifact@v7
         with:
-          name: deb-package
+          name: deb
           path: deb-dist/*
 
-  build-rpm:
-    name: Build Fedora / RHEL Package (.rpm)
+  rpm:
+    name: Fedora package
+    needs: version
     runs-on: ubuntu-latest
     container:
       image: fedora:latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Install RPM Build Tools
+      # git before checkout, so checkout makes a real clone that git archive can read.
+      - name: Install packaging dependencies
+        run: dnf install -y git rpm-build python3-devel pyproject-rpm-macros python3-pip python3-hatchling
+      - uses: actions/checkout@v7
+      - name: Build .rpm
         run: |
-          dnf install -y rpm-build python3-devel python3-pip python3-build python3-installer python3-hatchling python3-wheel systemd-rpm-macros tar git
-      - name: Prepare Source Tarball & Build RPM
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/SPECS
-          git archive --format=tar.gz --prefix=smart-dnd-${VERSION}/ -o ~/rpmbuild/SOURCES/smart-dnd-${VERSION}.tar.gz HEAD
-          cp packaging/rpm/smart-dnd.spec ~/rpmbuild/SPECS/
-          sed -i "s/^Version:.*/Version:        ${VERSION}/" ~/rpmbuild/SPECS/smart-dnd.spec
+          git archive --format=tar.gz --prefix="smart-dnd-$VERSION/" -o ~/rpmbuild/SOURCES/smart-dnd-$VERSION.tar.gz HEAD
+          sed "s/^Version:.*/Version:        $VERSION/" packaging/rpm/smart-dnd.spec > ~/rpmbuild/SPECS/smart-dnd.spec
           rpmbuild -ba ~/rpmbuild/SPECS/smart-dnd.spec
           mkdir -p rpm-dist
-          cp ~/rpmbuild/RPMS/*/*.rpm rpm-dist/
-      - uses: actions/upload-artifact@v4
+          cp ~/rpmbuild/RPMS/noarch/*.rpm rpm-dist/
+      - name: Install and smoke-test
+        run: |
+          dnf install -y rpm-dist/*.rpm
+          smart-dnd plugins
+          test -f /etc/xdg/autostart/com.keithvassallo.SmartDnd.desktop
+      - uses: actions/upload-artifact@v7
         with:
-          name: rpm-package
+          name: rpm
           path: rpm-dist/*
 
-  build-flatpak:
-    name: Build Flatpak Bundle (.flatpak)
+  flatpak:
+    name: Flatpak bundle
+    needs: version
     runs-on: ubuntu-latest
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: SmartDnd.flatpak
           manifest-path: packaging/flatpak/com.keithvassallo.SmartDnd.yaml
-          app-id: com.keithvassallo.SmartDnd
-      - uses: actions/upload-artifact@v4
-        with:
-          name: flatpak-bundle
-          path: SmartDnd.flatpak
+          bundle: smart-dnd-${{ needs.version.outputs.version }}-x86_64.flatpak
+          artifact-name: flatpak
 
-  publish-aur:
-    name: Update AUR PKGBUILD
-    needs: [build-python]
+  # FriendlyHub builds from a git tag, so its manifest points at this release's tag
+  # rather than the working tree. Attached to the release for the FriendlyHub PR.
+  friendlyhub:
+    name: FriendlyHub submission files
+    needs: version
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Generate .SRCINFO
+      - uses: actions/checkout@v7
+      - name: Generate manifest
         run: |
-          echo "AUR package ready in packaging/aur/PKGBUILD"
+          mkdir friendlyhub
+          python3 packaging/flatpak/friendlyhub-manifest.py "v$VERSION" "$GITHUB_SHA" > friendlyhub/com.keithvassallo.SmartDnd.yaml
+          cp data/com.keithvassallo.SmartDnd.metainfo.xml friendlyhub/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: friendlyhub
+          path: friendlyhub/*
 
   release:
-    name: Publish GitHub Release
-    needs: [build-python, build-deb, build-rpm, build-flatpak]
+    name: GitHub release
+    needs: [version, python, deb, rpm, flatpak, friendlyhub]
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Download all built artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
-
-      - name: Generate Checksums
-        run: |
-          cd release-assets
-          sha256sum * > SHA256SUMS
-          cat SHA256SUMS
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Generate checksums
+        working-directory: release-assets
+        run: sha256sum * | tee SHA256SUMS
+      - uses: softprops/action-gh-release@v3
         with:
           files: release-assets/*
           generate_release_notes: true
+
+  aur:
+    name: AUR package
+    needs: [version, release]
+    # Tag pushes publish only once the GitHub release exists; dry runs (release
+    # skipped) still build and test the PKGBUILD.
+    if: >-
+      !cancelled() && needs.version.result == 'success' &&
+      (needs.release.result == 'success' ||
+       (needs.release.result == 'skipped' && needs.version.outputs.publish != 'true'))
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PUBLISH: ${{ needs.version.outputs.publish }}
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git openssh pacman-contrib python-build python-installer python-hatchling
+      - uses: actions/checkout@v7
+      - name: Prepare PKGBUILD and .SRCINFO
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          useradd --create-home builder
+          mkdir aur-build
+          sed -e "s/^pkgver=.*/pkgver=$VERSION/" -e "s/^pkgrel=.*/pkgrel=1/" packaging/aur/smart-dnd/PKGBUILD > aur-build/PKGBUILD
+          if [ "$PUBLISH" != true ]; then
+            # Dry run: the tag tarball doesn't exist, so build from this checkout instead.
+            git archive --format=tar.gz --prefix="smart-dnd-linux-$VERSION/" -o "aur-build/smart-dnd-$VERSION.tar.gz" HEAD
+            sed -i 's|^source=.*|source=("$pkgname-$pkgver.tar.gz")|' aur-build/PKGBUILD
+          fi
+          chown -R builder aur-build
+          cd aur-build
+          sudo -u builder updpkgsums
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          cat PKGBUILD .SRCINFO
+      - name: Test build
+        working-directory: aur-build
+        run: sudo -u builder makepkg --nodeps --noconfirm
+      - name: Publish to the AUR
+        if: needs.version.outputs.publish == 'true'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::error::AUR_SSH_PRIVATE_KEY secret is not set; see docs/releasing.md"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          # Pinned host key, fingerprint SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4
+          # as published on https://aur.archlinux.org
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes"
+          git clone ssh://aur@aur.archlinux.org/smart-dnd.git aur-repo
+          cp aur-build/PKGBUILD aur-build/.SRCINFO aur-repo/
+          cd aur-repo
+          git config user.name "Keith Vassallo"
+          git config user.email "keith@vassallo.cloud"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR package already up to date"
+          else
+            git commit -m "Update to $VERSION"
+            git push origin HEAD:master
+          fi
