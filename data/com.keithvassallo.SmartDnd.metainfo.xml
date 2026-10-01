@@ -26,6 +26,24 @@
   <developer id="com.keithvassallo">
     <name>Keith Vassallo</name>
   </developer>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Recurring schedules, including windows that run past midnight</caption>
+      <image>https://raw.githubusercontent.com/keithvassallomt/smart-dnd-linux/main/data/screenshots/schedules.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Calendar rules that match event titles, with buffers before and after</caption>
+      <image>https://raw.githubusercontent.com/keithvassallomt/smart-dnd-linux/main/data/screenshots/calendar-rules.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Choose your notification system, calendar backend and start at login</caption>
+      <image>https://raw.githubusercontent.com/keithvassallomt/smart-dnd-linux/main/data/screenshots/settings.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Tray menu in the Caelestia shell: toggle DND and see what's next</caption>
+      <image>https://raw.githubusercontent.com/keithvassallomt/smart-dnd-linux/main/data/screenshots/caelestia-tray.png</image>
+    </screenshot>
+  </screenshots>
   <releases>
     <release version="0.1.0" date="2026-10-01">
       <description>
