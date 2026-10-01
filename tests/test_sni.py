@@ -132,3 +132,15 @@ def test_tooltip_names_the_trigger():
     tray.update_status(Status(active=True, reason="calendar", trigger_name="Team Meeting"))
     _, _, title, _ = tray._get_tooltip()
     assert title == "Smart DND (Active • calendar: Team Meeting)"
+
+
+def test_tray_item_is_never_marked_passive():
+    # Caelestia (Quickshell) hides Passive items, which would hide the icon whenever DND is off.
+    tray = StatusNotifierTray(on_toggle_dnd=MagicMock())
+    tray._bus = MagicMock()
+    tray._reg_id = 1
+    tray.update_status(Status(active=False))
+    tray.update_status(Status(active=True))
+    emitted = [c.args[3] for c in tray._bus.emit_signal.call_args_list]
+    assert "NewStatus" not in emitted
+    assert tray._handle_get_property(None, "", "", "", "Status").unpack() == "Active"

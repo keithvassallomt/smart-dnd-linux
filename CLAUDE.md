@@ -25,7 +25,9 @@ Three processes, all from the `smart-dnd` entry point (`smart_dnd/cli.py`):
   SNI tray, a logind `PrepareForSleep` subscription and one re-armed timer. All state lives on the
   main loop; the only other thread is the calendar fetch, which hands results back via `GLib.idle_add`.
 - **GUI** (`smart-dnd gui`): separate `Adw.Application` (`com.keithvassallo.SmartDnd`). Starts the
-  daemon detached if it isn't running (`host.start_daemon_detached`). Talks to
+  daemon detached if it isn't running (`host.start_daemon_detached`, passing `--config` on), then
+  takes its config from the daemon (`get_config`) so it always edits the file the daemon uses.
+  `--config` is applied process-wide by `config.set_default_config_path`. Talks to
   the daemon over IPC from a single background worker (`MainWindow._run_in_background`), never
   from the GTK thread. If the daemon is down it writes `config.json` directly and calls plugins
   in-process.

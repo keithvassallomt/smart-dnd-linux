@@ -406,13 +406,9 @@ class StatusNotifierTray:
                         "NewToolTip",
                         None,
                     )
-                    self._bus.emit_signal(
-                        None,
-                        "/StatusNotifierItem",
-                        "org.kde.StatusNotifierItem",
-                        "NewStatus",
-                        GLib.Variant("(s)", ("Active" if status.active else "Passive",)),
-                    )
+                    # No NewStatus: the item stays "Active". "Passive" means "may be hidden",
+                    # and hosts such as Caelestia do hide it, losing the tray icon whenever
+                    # DND is off.
                     self._bus.emit_signal(
                         None,
                         "/StatusNotifierItem",
