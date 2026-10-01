@@ -76,6 +76,8 @@ class IpcServer:
                 resp = {"result": None, "error": str(e)}
 
             client_sock.sendall((json.dumps(resp) + "\n").encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError):
+            logger.debug("Client closed connection before response could be delivered.")
         except Exception as e:
             logger.debug("Client communication error: %s", e)
         finally:
@@ -109,7 +111,7 @@ class SmartDndClient:
         params = params or {}
         payload = json.dumps({"method": method, "params": params}) + "\n"
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(5.0)
+            s.settimeout(20.0)
             s.connect(str(self.sock_path))
             s.sendall(payload.encode("utf-8"))
             data = b""
@@ -147,6 +149,14 @@ class SmartDndClient:
     def list_calendars(self) -> List[CalendarSource]:
         res = self.call("list_calendars")
         return [CalendarSource(**c) for c in res]
+
+    def get_events(self) -> List[Any]:
+        try:
+            from smart_dnd.models import CalendarEvent
+            res = self.call("get_events")
+            return [CalendarEvent(**e) for e in res]
+        except Exception:
+            return []
 
     def list_plugins(self) -> Dict[str, List[str]]:
         return dict(self.call("list_plugins"))

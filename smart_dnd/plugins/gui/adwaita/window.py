@@ -63,6 +63,13 @@ class MainWindow(Adw.ApplicationWindow):
             return []
 
     def _fetch_events(self) -> List[Any]:
+        if self.client and self.client.is_daemon_running():
+            try:
+                events = self.client.get_events()
+                if events:
+                    return events
+            except Exception:
+                pass
         try:
             from smart_dnd.plugins.manager import PluginManager
             pm = PluginManager()

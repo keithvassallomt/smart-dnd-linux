@@ -33,6 +33,7 @@ class EvolutionCalendarPlugin(CalendarPlugin):
             logger.warning("Failed to initialize Evolution Data Server: %s", e)
             self._gi_loaded = False
             self._registry = None
+        self._clients: dict[str, Any] = {}
 
     def list_calendars(self) -> List[CalendarSource]:
         if not self._gi_loaded or not self._registry:
@@ -75,23 +76,42 @@ class EvolutionCalendarPlugin(CalendarPlugin):
             source_uid = source.get_uid()
             source_name = source.get_display_name()
 
-            try:
-                client = self._ECal.Client.connect_sync(
-                    source, self._ECal.ClientSourceType.EVENTS, 3, None
-                )
-            except Exception as e:
-                logger.debug("Could not connect to calendar '%s': %s", source_name, e)
-                continue
+            client = self._clients.get(source_uid)
+            if client is None:
+                try:
+                    client = self._ECal.Client.connect_sync(
+                        source, self._ECal.ClientSourceType.EVENTS, 1, None
+                    )
+                    self._clients[source_uid] = client
+                except Exception as e:
+                    logger.debug("Could not connect to calendar '%s': %s", source_name, e)
+                    continue
 
             def instance_cb(comp, instance_start, instance_end, user_data, cancellable):
                 try:
                     summary = comp.get_summary() or ""
                     dtstart = comp.get_dtstart()
                     all_day = dtstart.is_date() if dtstart else False
-                    uid = comp.get_uid() or f"{source_uid}_{instance_start.as_timet()}"
 
-                    s_ts = float(instance_start.as_timet())
-                    e_ts = float(instance_end.as_timet())
+                    # Timezone resolution: use as_timet_with_zone to get exact UTC epoch timestamp
+                    tz = instance_start.get_timezone()
+                    if not tz and dtstart:
+                        tz = dtstart.get_timezone()
+
+                    if tz:
+                        s_ts = float(instance_start.as_timet_with_zone(tz))
+                    else:
+                        s_ts = float(instance_start.as_timet())
+
+                    end_tz = instance_end.get_timezone()
+                    if not end_tz:
+                        end_tz = tz
+                    if end_tz:
+                        e_ts = float(instance_end.as_timet_with_zone(end_tz))
+                    else:
+                        e_ts = float(instance_end.as_timet())
+
+                    uid = comp.get_uid() or f"{source_uid}_{int(s_ts)}"
 
                     events.append(
                         CalendarEvent(

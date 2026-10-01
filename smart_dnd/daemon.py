@@ -302,6 +302,21 @@ class SmartDndDaemon:
                 {"uid": c.uid, "name": c.name, "color": c.color, "enabled": c.enabled}
                 for c in self._calendar_plugin.list_calendars()
             ]
+        elif method == "get_events":
+            now_sec = time.time()
+            events = self._get_events(now_sec)
+            return [
+                {
+                    "uid": e.uid,
+                    "summary": e.summary,
+                    "start": e.start,
+                    "end": e.end,
+                    "all_day": e.all_day,
+                    "source_uid": e.source_uid,
+                    "source_name": e.source_name,
+                }
+                for e in events
+            ]
         elif method == "list_plugins":
             return {
                 "calendar": list(self.plugin_manager.calendar_plugins.keys()),
