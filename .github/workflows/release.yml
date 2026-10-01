@@ -14,6 +14,7 @@ jobs:
   version:
     name: Check version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.check.outputs.version }}
       publish: ${{ steps.check.outputs.publish }}
@@ -39,6 +40,7 @@ jobs:
     name: Wheel and sdist
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -57,14 +59,18 @@ jobs:
     name: Debian / Ubuntu package
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - name: Install packaging dependencies
+        env:
+          # A dead mirror connection times out and is retried instead of stalling the job.
+          APT_OPTS: -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
+          sudo apt-get $APT_OPTS update
+          sudo apt-get $APT_OPTS install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
       - name: Build .deb
         run: |
           cp -r packaging/debian debian
@@ -73,8 +79,11 @@ jobs:
           mkdir -p deb-dist
           mv ../smart-dnd_*.deb deb-dist/
       - name: Install and smoke-test
+        env:
+          # A dead mirror connection times out and is retried instead of stalling the job.
+          APT_OPTS: -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
         run: |
-          sudo apt-get install -y ./deb-dist/*.deb
+          sudo apt-get $APT_OPTS install -y ./deb-dist/*.deb
           smart-dnd plugins
           test -f /etc/xdg/autostart/com.keithvassallo.SmartDnd.desktop
       - uses: actions/upload-artifact@v7
@@ -86,6 +95,7 @@ jobs:
     name: Fedora package
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container:
       image: fedora:latest
     env:
@@ -118,6 +128,7 @@ jobs:
     name: Flatpak bundle
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
       options: --privileged
@@ -135,6 +146,7 @@ jobs:
     name: FriendlyHub submission files
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -154,6 +166,7 @@ jobs:
     needs: [version, python, deb, rpm, flatpak, friendlyhub]
     if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     env:
@@ -203,6 +216,7 @@ jobs:
       (needs.release.result == 'success' ||
        (needs.release.result == 'skipped' && needs.version.outputs.publish != 'true'))
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container:
       image: archlinux:base-devel
     env:
