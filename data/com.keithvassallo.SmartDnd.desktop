@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Smart DND
+Comment=Automate Do Not Disturb based on schedules and calendar events
+Exec=smart-dnd gui
+Icon=com.keithvassallo.SmartDnd
+Terminal=false
+Type=Application
+Categories=Utility;Settings;DesktopSettings;
+Keywords=dnd;notifications;calendar;schedule;quiet;
+StartupNotify=true

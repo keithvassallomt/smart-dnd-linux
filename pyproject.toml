@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "smart-dnd-linux"
+version = "0.1.0"
+description = "Automatically enable Do Not Disturb on schedule or calendar events for Linux desktops (Hyprland, Caelestia, Sway, GNOME, etc.)"
+readme = "README.md"
+authors = [
+    { name = "Keith Vassallo" }
+]
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+smart-dnd = "smart_dnd.cli:main"
+smart-dnd-gui = "smart_dnd.cli:gui_main"
+smart-dnd-daemon = "smart_dnd.cli:daemon_main"
+
+[project.entry-points."smart_dnd.calendar"]
+evolution = "smart_dnd.plugins.calendar.evolution:EvolutionCalendarPlugin"
+
+[project.entry-points."smart_dnd.notifications"]
+caelestia = "smart_dnd.plugins.notifications.caelestia:CaelestiaNotificationPlugin"
+swaync = "smart_dnd.plugins.notifications.swaync:SwayNCNotificationPlugin"
+dunst = "smart_dnd.plugins.notifications.dunst:DunstNotificationPlugin"
+
+[project.entry-points."smart_dnd.gui"]
+adwaita = "smart_dnd.plugins.gui.adwaita.app:AdwaitaGuiPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["smart_dnd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
