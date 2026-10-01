@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Optional
 
-from smart_dnd.config import load_config
+from smart_dnd.config import get_config_path, load_config, set_default_config_path
 from smart_dnd.daemon import SmartDndDaemon
 from smart_dnd import autostart
 from smart_dnd.host import IN_FLATPAK, start_daemon_detached
@@ -204,24 +204,35 @@ def cmd_daemon(args: argparse.Namespace) -> int:
         return 1
 
 
-def _ensure_daemon_running(client: SmartDndClient) -> None:
+def _ensure_daemon_running(client: SmartDndClient, config_path: Optional[str]) -> None:
     """Start the daemon if needed: the GUI is useless without it, and after a fresh
     install nothing else starts it until the next login."""
     if client.is_daemon_running():
         return
-    start_daemon_detached()
+    start_daemon_detached(get_config_path(config_path) if config_path else None)
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and not client.is_daemon_running():
         time.sleep(0.05)
 
 
+def _gui_config(client: SmartDndClient, config_path: Optional[str]) -> Config:
+    """The running daemon's config, so the GUI edits the file the daemon actually uses
+    (it may have been started with a different --config)."""
+    if client.is_daemon_running():
+        try:
+            return client.get_config()
+        except Exception:
+            pass
+    return load_config(config_path)
+
+
 def cmd_gui(args: argparse.Namespace) -> int:
-    config = load_config(args.config)
     client = get_client()
     pm = PluginManager()
     if IN_FLATPAK:
         autostart.enable_by_default_once()
-    _ensure_daemon_running(client)
+    _ensure_daemon_running(client, args.config)
+    config = _gui_config(client, args.config)
 
     gui_backend = config.gui_backend or "adwaita"
     try:
@@ -238,6 +249,7 @@ def daemon_main() -> None:
     parser.add_argument("--config", "-c", help="Path to config file", default=None)
     parser.add_argument("--debug", "-d", help="Enable debug logging", action="store_true")
     args = parser.parse_args()
+    set_default_config_path(args.config)
     sys.exit(cmd_daemon(args))
 
 
@@ -245,6 +257,7 @@ def gui_main() -> None:
     parser = argparse.ArgumentParser(description="Smart DND Preferences GUI")
     parser.add_argument("--config", "-c", help="Path to config file", default=None)
     args = parser.parse_args()
+    set_default_config_path(args.config)
     sys.exit(cmd_gui(args))
 
 
@@ -284,6 +297,7 @@ def main() -> None:
     subparsers.add_parser("test", help="Dry-run evaluation of rules against upcoming events")
 
     args = parser.parse_args()
+    set_default_config_path(args.config)
     if not args.command:
         # Default action when run with no arguments: open GUI if in graphical session, else show status
         if sys.stdout.isatty() and not any(env in os.environ for env in ("WAYLAND_DISPLAY", "DISPLAY")):

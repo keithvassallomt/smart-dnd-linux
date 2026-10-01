@@ -49,7 +49,7 @@ def daemon_log_path() -> Path:
     return Path(state_home) / "smart-dnd" / "daemon.log"
 
 
-def start_daemon_detached() -> None:
+def start_daemon_detached(config_path: Optional[Path] = None) -> None:
     """Start the daemon so that it outlives the caller (the GUI).
 
     Natively that's a process in its own session. In a Flatpak a child process would
@@ -58,9 +58,12 @@ def start_daemon_detached() -> None:
     of this app instead, which outlives the caller.
     """
     if IN_FLATPAK:
-        argv = ["flatpak-spawn", "smart-dnd", "daemon"]
+        argv = ["flatpak-spawn", "smart-dnd"]
     else:
-        argv = [sys.executable, "-m", "smart_dnd.cli", "daemon"]
+        argv = [sys.executable, "-m", "smart_dnd.cli"]
+    if config_path:
+        argv += ["--config", str(config_path)]
+    argv.append("daemon")
     log_path = daemon_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "wb") as log:

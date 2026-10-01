@@ -16,10 +16,19 @@ DEFAULT_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".conf
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.json"
 
 
+# Set from the CLI's --config, so every load and save in this process uses that file.
+_config_path_override: Optional[Path] = None
+
+
+def set_default_config_path(path: Optional[str | Path]) -> None:
+    global _config_path_override
+    _config_path_override = Path(path).expanduser().resolve() if path else None
+
+
 def get_config_path(custom_path: Optional[str | Path] = None) -> Path:
     if custom_path:
         return Path(custom_path)
-    return DEFAULT_CONFIG_FILE
+    return _config_path_override or DEFAULT_CONFIG_FILE
 
 
 def load_config(custom_path: Optional[str | Path] = None) -> Config:
