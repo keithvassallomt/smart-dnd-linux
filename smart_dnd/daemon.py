@@ -62,6 +62,7 @@ class SmartDndDaemon:
             on_toggle_dnd=self._toggle_dnd_tray,
             on_open_gui=self._toggle_gui_tray,
             on_quit=self.stop,
+            monochrome=self.config.monochrome_tray_icon,
         )
         self._cached_events: List[CalendarEvent] = []
         self._last_event_fetch_ts: float = 0.0
@@ -294,6 +295,7 @@ class SmartDndDaemon:
             self.config = Config.from_dict(new_conf_dict)
             save_config(self.config, self.config_path)
             self.reload_plugins()
+            self.tray.set_monochrome(self.config.monochrome_tray_icon)
             self.evaluate()
             return True
         elif method == "evaluate":

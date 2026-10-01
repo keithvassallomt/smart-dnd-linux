@@ -117,27 +117,33 @@ DBUSMENU_XML = """
 
 def ensure_icons_installed() -> None:
     """Ensure icons exist in ~/.local/share/icons/hicolor so compositors find them."""
-    icons_src = Path(__file__).resolve().parents[1] / "data" / "icons"
-    icons_dst = Path.home() / ".local" / "share" / "icons"
+    icons_src = Path(__file__).resolve().parents[1] / "data" / "icons" / "hicolor"
+    icons_dst = Path.home() / ".local" / "share" / "icons" / "hicolor"
 
     if not icons_src.exists():
         return
 
     try:
-        for s in (16, 32, 48, 64, 128, 256, 512):
-            src = icons_src / "hicolor" / f"{s}x{s}" / "apps" / "com.keithvassallo.SmartDnd.png"
-            dst = icons_dst / "hicolor" / f"{s}x{s}" / "apps" / "com.keithvassallo.SmartDnd.png"
-            if src.exists() and not dst.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(src, dst)
+        updated = False
+        for src_file in icons_src.rglob("*"):
+            if src_file.is_file():
+                rel = src_file.relative_to(icons_src)
+                dst_file = icons_dst / rel
+                if not dst_file.exists() or dst_file.stat().st_size != src_file.stat().st_size:
+                    dst_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src_file, dst_file)
+                    updated = True
 
-        for t in ("scalable", "symbolic"):
-            suffix = "-symbolic.svg" if t == "symbolic" else ".svg"
-            src = icons_src / "hicolor" / t / "apps" / f"com.keithvassallo.SmartDnd{suffix}"
-            dst = icons_dst / "hicolor" / t / "apps" / f"com.keithvassallo.SmartDnd{suffix}"
-            if src.exists() and not dst.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(src, dst)
+        if updated and shutil.which("gtk-update-icon-cache"):
+            try:
+                subprocess.run(
+                    ["gtk-update-icon-cache", "-q", "-t", str(icons_dst)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception:
+                pass
     except Exception as e:
         logger.debug("Icon auto-installation notice: %s", e)
 
@@ -212,24 +218,55 @@ class StatusNotifierTray:
         on_toggle_dnd: Callable[[], Status],
         on_open_gui: Optional[Callable[[], None]] = None,
         on_quit: Optional[Callable[[], None]] = None,
+        monochrome: bool = False,
     ) -> None:
         self.on_toggle_dnd = on_toggle_dnd
         self.on_open_gui = on_open_gui or toggle_gui
         self.on_quit = on_quit or self._default_quit
+        self.monochrome = monochrome
 
         self.status = Status()
-        self.icon_name = "com.keithvassallo.SmartDnd"
+        self.icon_name = (
+            "com.keithvassallo.SmartDnd-symbolic" if self.monochrome else "com.keithvassallo.SmartDnd"
+        )
         self._bus: Optional[Gio.DBusConnection] = None
         self._reg_id: int = 0
         self._menu_reg_id: int = 0
         self._menu_revision: int = 1
 
-        repo_root = Path(__file__).resolve().parents[1]
+        self._repo_root = Path(__file__).resolve().parents[1]
         self._icon_theme_path = str(Path.home() / ".local" / "share" / "icons")
 
-        # Preload ARGB pixmaps for tray hosts that don't load themed icon names
-        png_32 = repo_root / "data" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
-        self._normal_pixmap = load_icon_pixmap(png_32, 24)
+        self._reload_pixmap()
+
+    def _reload_pixmap(self) -> None:
+        if self.monochrome:
+            png_path = self._repo_root / "data" / "icons" / "hicolor" / "symbolic" / "apps" / "com.keithvassallo.SmartDnd-symbolic.png"
+            if not png_path.exists():
+                png_path = self._repo_root / "data" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
+        else:
+            png_path = self._repo_root / "data" / "icons" / "hicolor" / "32x32" / "apps" / "com.keithvassallo.SmartDnd.png"
+        self._normal_pixmap = load_icon_pixmap(png_path, 24)
+
+    def set_monochrome(self, monochrome: bool) -> None:
+        if self.monochrome == monochrome:
+            return
+        self.monochrome = monochrome
+        self.icon_name = (
+            "com.keithvassallo.SmartDnd-symbolic" if self.monochrome else "com.keithvassallo.SmartDnd"
+        )
+        self._reload_pixmap()
+        if self._bus and self._reg_id:
+            try:
+                self._bus.emit_signal(
+                    None,
+                    "/StatusNotifierItem",
+                    "org.kde.StatusNotifierItem",
+                    "NewIcon",
+                    None,
+                )
+            except Exception as e:
+                logger.debug("Failed emitting NewIcon on monochrome change: %s", e)
 
     def _default_quit(self) -> None:
         logger.info("Quit requested from tray.")
@@ -293,7 +330,7 @@ class StatusNotifierTray:
     def update_status(self, status: Status) -> None:
         self.status = status
         self.icon_name = (
-            "notifications-disabled-symbolic" if status.active else "com.keithvassallo.SmartDnd"
+            "com.keithvassallo.SmartDnd-symbolic" if self.monochrome else "com.keithvassallo.SmartDnd"
         )
         self._menu_revision += 1
 
@@ -306,6 +343,13 @@ class StatusNotifierTray:
                         "org.kde.StatusNotifierItem",
                         "NewToolTip",
                         None,
+                    )
+                    self._bus.emit_signal(
+                        None,
+                        "/StatusNotifierItem",
+                        "org.kde.StatusNotifierItem",
+                        "NewStatus",
+                        GLib.Variant("(s)", ("Active" if status.active else "Passive",)),
                     )
                     self._bus.emit_signal(
                         None,

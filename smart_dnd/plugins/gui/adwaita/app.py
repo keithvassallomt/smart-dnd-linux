@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any
 
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
-from gi.repository import Adw, Gio
+from gi.repository import Adw, Gdk, Gio, Gtk
 
 from smart_dnd.models import Config
 from smart_dnd.plugins.gui.adwaita.window import MainWindow
@@ -30,6 +31,16 @@ class SmartDndApp(Adw.Application):
 
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
+
+        display = Gdk.Display.get_default()
+        if display:
+            icon_theme = Gtk.IconTheme.get_for_display(display)
+            repo_icons = Path(__file__).resolve().parents[4] / "data" / "icons"
+            if repo_icons.exists() and str(repo_icons) not in icon_theme.get_search_path():
+                icon_theme.add_search_path(str(repo_icons))
+            user_icons = Path.home() / ".local" / "share" / "icons"
+            if user_icons.exists() and str(user_icons) not in icon_theme.get_search_path():
+                icon_theme.add_search_path(str(user_icons))
 
         toggle_act = Gio.SimpleAction.new("toggle", None)
         toggle_act.connect("activate", lambda *_: self.toggle_window())

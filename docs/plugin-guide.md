@@ -9,6 +9,8 @@ Plugins can be loaded in two ways:
 1. **Drop-in files**: Placed in `~/.config/smart-dnd/plugins/{calendar,notifications,gui}/*.py`
 2. **Python packages**: Declaring entry points in `pyproject.toml`
 
+> **Contributing**: If you develop a plugin that could be useful to others, please consider [submitting a Pull Request](#5-contributing-your-plugin-upstream) to have it officially included in Smart DND!
+
 ---
 
 ## 1. Writing a Calendar Plugin
@@ -108,3 +110,31 @@ my_notif = "my_package.plugin:MyNotificationPlugin"
 [project.entry-points."smart_dnd.gui"]
 my_gui = "my_package.plugin:MyGuiPlugin"
 ```
+
+---
+
+## 5. Contributing Your Plugin Upstream
+
+Have you built a plugin for a notification daemon, calendar service, or desktop environment that isn't yet supported out of the box? **We warmly encourage you to submit a Pull Request to have it officially included in Smart DND!**
+
+Having your plugin officially included provides several benefits:
+- **Zero setup for other users**: Anyone running your desktop environment or notification service can use Smart DND out of the box without manual installation.
+- **Maintenance & compatibility**: Your plugin will be covered by test suites and kept up to date alongside internal architecture changes.
+- **Visibility**: Your integration will be listed in documentation, CLI output, and application settings.
+
+### How to Submit Your Plugin
+
+1. **Fork the repository** on GitHub: [smart-dnd-linux](https://github.com/keithvassallomt/smart-dnd-linux).
+2. **Add your plugin module**:
+   Place your plugin implementation under the appropriate directory in `smart_dnd/plugins/`:
+   - `smart_dnd/plugins/calendar/` for calendar backends.
+   - `smart_dnd/plugins/notifications/` for notification daemons.
+   - `smart_dnd/plugins/gui/` for GUI frontends.
+3. **Register your plugin**:
+   - Add the entry point under the corresponding category in `pyproject.toml` (e.g. `[project.entry-points."smart_dnd.notifications"]`).
+   - Register it in `_register_builtins()` within `smart_dnd/plugins/manager.py` so it can be resolved as a built-in fallback.
+4. **Add tests**:
+   - Add unit tests in `tests/test_plugins.py` verifying that the plugin is discovered and instantiated cleanly. Mock any external CLI binaries or DBus interfaces where appropriate.
+5. **Open a Pull Request**:
+   - Open a PR describing what backend/desktop your plugin supports and how to test it.
+   - We are happy to help review your implementation and get it merged!

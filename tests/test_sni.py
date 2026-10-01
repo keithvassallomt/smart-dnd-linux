@@ -75,3 +75,33 @@ def test_sni_handle_clicks():
     # Click item 6: Quit
     tray._handle_menu_item_click(6)
     on_quit.assert_called_once()
+
+
+def test_sni_icon_default_color():
+    tray = StatusNotifierTray(on_toggle_dnd=MagicMock())
+    assert tray.monochrome is False
+    assert tray.icon_name == "com.keithvassallo.SmartDnd"
+
+    # Status update keeps color icon
+    tray.update_status(Status(active=True))
+    assert tray.icon_name == "com.keithvassallo.SmartDnd"
+
+
+def test_sni_icon_monochrome_toggle():
+    tray = StatusNotifierTray(on_toggle_dnd=MagicMock(), monochrome=True)
+    assert tray.monochrome is True
+    assert tray.icon_name == "com.keithvassallo.SmartDnd-symbolic"
+
+    # Status update keeps symbolic icon
+    tray.update_status(Status(active=True))
+    assert tray.icon_name == "com.keithvassallo.SmartDnd-symbolic"
+
+    # Switch to color
+    tray.set_monochrome(False)
+    assert tray.monochrome is False
+    assert tray.icon_name == "com.keithvassallo.SmartDnd"
+
+    # Switch back to monochrome
+    tray.set_monochrome(True)
+    assert tray.monochrome is True
+    assert tray.icon_name == "com.keithvassallo.SmartDnd-symbolic"

@@ -83,11 +83,27 @@ class GeneralSettingsDialog(Adw.PreferencesDialog):
         self.cal_combo.connect("notify::selected", self._on_changed)
         plugin_group.add(self.cal_combo)
 
+        # 3. System Tray group
+        tray_group = Adw.PreferencesGroup(
+            title="System Tray",
+            description="StatusNotifierItem (SNI) tray icon appearance",
+        )
+        page.add(tray_group)
+
+        self.monochrome_switch = Adw.SwitchRow(
+            title="Monochrome tray icon",
+            subtitle="Use symbolic monochrome icon instead of full-color icon (for platforms like GNOME that support recoloring)",
+            active=config.monochrome_tray_icon,
+        )
+        self.monochrome_switch.connect("notify::active", self._on_changed)
+        tray_group.add(self.monochrome_switch)
+
         self.available_plugins = available_plugins
 
     def _on_changed(self, *args) -> None:
         self.config.master_enabled = self.master_switch.get_active()
         self.config.ignore_all_day = self.allday_switch.get_active()
+        self.config.monochrome_tray_icon = self.monochrome_switch.get_active()
 
         notif_items = self.available_plugins.get("notifications", ["caelestia"])
         if self.notif_combo.get_selected() < len(notif_items):

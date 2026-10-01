@@ -103,6 +103,7 @@ class Config:
     calendar_backend: str = "evolution"
     notification_backend: str = "caelestia"
     gui_backend: str = "adwaita"
+    monochrome_tray_icon: bool = False
     schedules: List[Schedule] = field(default_factory=list)
     calendar_rules: List[CalendarRule] = field(default_factory=list)
 
@@ -113,6 +114,7 @@ class Config:
             "calendar_backend": self.calendar_backend,
             "notification_backend": self.notification_backend,
             "gui_backend": self.gui_backend,
+            "monochrome_tray_icon": self.monochrome_tray_icon,
             "schedules": [asdict(s) for s in self.schedules],
             "calendar_rules": [asdict(r) for r in self.calendar_rules],
         }
@@ -121,12 +123,16 @@ class Config:
     def from_dict(cls, data: dict[str, Any]) -> Config:
         schedules = [Schedule.from_dict(s) for s in data.get("schedules", [])]
         calendar_rules = [CalendarRule.from_dict(r) for r in data.get("calendar_rules", [])]
+        monochrome = data.get("monochrome_tray_icon")
+        if monochrome is None:
+            monochrome = data.get("monochromeTrayIcon", False)
         return cls(
             master_enabled=bool(data.get("master_enabled", True)),
             ignore_all_day=bool(data.get("ignore_all_day", True)),
             calendar_backend=str(data.get("calendar_backend", "caelestia" if "caelestia" in data.get("calendar_backend", "") else data.get("calendar_backend", "evolution"))),
             notification_backend=str(data.get("notification_backend", "caelestia")),
             gui_backend=str(data.get("gui_backend", "adwaita")),
+            monochrome_tray_icon=bool(monochrome),
             schedules=schedules,
             calendar_rules=calendar_rules,
         )

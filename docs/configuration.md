@@ -16,6 +16,7 @@ Smart DND stores its configuration in JSON format at:
   "calendar_backend": "evolution",
   "notification_backend": "caelestia",
   "gui_backend": "adwaita",
+  "monochrome_tray_icon": false,
   "schedules": [
     {
       "id": "work-hours",
@@ -51,6 +52,7 @@ Smart DND stores its configuration in JSON format at:
 - `calendar_backend` *(string, default: `"evolution"`)*: Active calendar plugin ID.
 - `notification_backend` *(string, default: `"caelestia"`)*: Active notification plugin ID.
 - `gui_backend` *(string, default: `"adwaita"`)*: Active GUI frontend plugin ID.
+- `monochrome_tray_icon` *(boolean, default: `false`)*: When `true`, uses a symbolic monochrome icon for the SNI system tray (recommended for desktops like GNOME that support symbolic icon recoloring). When `false`, uses the full-color icon (recommended for desktops like Caelestia/KDE in dark mode).
 
 ### Schedule Object
 - `id` *(string)*: Unique identifier.

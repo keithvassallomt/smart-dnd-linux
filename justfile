@@ -35,13 +35,9 @@ install:
     cp data/com.keithvassallo.SmartDnd.metainfo.xml ~/.local/share/metainfo/
     cp data/smart-dnd.service ~/.config/systemd/user/
     # Install icons
-    mkdir -p ~/.local/share/icons/hicolor/scalable/apps ~/.local/share/icons/hicolor/symbolic/apps
-    cp data/icons/hicolor/scalable/apps/com.keithvassallo.SmartDnd.svg ~/.local/share/icons/hicolor/scalable/apps/
-    cp data/icons/hicolor/symbolic/apps/com.keithvassallo.SmartDnd-symbolic.svg ~/.local/share/icons/hicolor/symbolic/apps/
-    for s in 16 32 48 64 128 256 512; do \
-        mkdir -p ~/.local/share/icons/hicolor/${s}x${s}/apps; \
-        cp data/icons/hicolor/${s}x${s}/apps/com.keithvassallo.SmartDnd.png ~/.local/share/icons/hicolor/${s}x${s}/apps/; \
-    done
+    mkdir -p ~/.local/share/icons/hicolor
+    cp -r data/icons/hicolor/* ~/.local/share/icons/hicolor/
+    gtk-update-icon-cache -q -t ~/.local/share/icons/hicolor 2>/dev/null || true
     systemctl --user daemon-reload
     @echo "Installed Smart DND! Enable with: systemctl --user enable --now smart-dnd"
 
@@ -51,6 +47,10 @@ uninstall:
     rm -f ~/.local/share/applications/com.keithvassallo.SmartDnd.desktop
     rm -f ~/.local/share/metainfo/com.keithvassallo.SmartDnd.metainfo.xml
     rm -f ~/.local/share/icons/hicolor/*/apps/com.keithvassallo.SmartDnd.*
+    rm -f ~/.local/share/icons/hicolor/*/apps/smart-dnd.*
+    rm -f ~/.local/share/icons/hicolor/*/actions/smart-dnd-symbolic.*
+    rm -f ~/.local/share/icons/hicolor/*/actions/com.keithvassallo.SmartDnd-symbolic.*
+    gtk-update-icon-cache -q -t ~/.local/share/icons/hicolor 2>/dev/null || true
     rm -f ~/.config/systemd/user/smart-dnd.service
     systemctl --user daemon-reload
 
