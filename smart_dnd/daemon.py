@@ -69,7 +69,8 @@ class SmartDndDaemon:
 
         # 2. Hook systemd logind PrepareForSleep signal
         try:
-            self._sleep_sub_id = Gio.DBus.system.signal_subscribe(
+            self._system_bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+            self._sleep_sub_id = self._system_bus.signal_subscribe(
                 "org.freedesktop.login1",
                 "org.freedesktop.login1.Manager",
                 "PrepareForSleep",
@@ -77,8 +78,10 @@ class SmartDndDaemon:
                 None,
                 Gio.DBusSignalFlags.NONE,
                 self._on_prepare_for_sleep,
+                None,
             )
         except Exception as e:
+            self._system_bus = None
             logger.warning("Could not subscribe to PrepareForSleep: %s", e)
 
         # 3. Setup signals (SIGINT, SIGTERM)
@@ -100,8 +103,8 @@ class SmartDndDaemon:
             GLib.source_remove(self._timer_id)
             self._timer_id = None
 
-        if self._sleep_sub_id:
-            Gio.DBus.system.signal_unsubscribe(self._sleep_sub_id)
+        if self._sleep_sub_id and getattr(self, "_system_bus", None):
+            self._system_bus.signal_unsubscribe(self._sleep_sub_id)
             self._sleep_sub_id = 0
 
         # Release DND if we owned it and it is still on
@@ -247,9 +250,7 @@ class SmartDndDaemon:
             seconds_delay = min(seconds_delay, 900)
 
         logger.debug("Next timer wake in %d seconds", seconds_delay)
-        self._timer_id = GLib.timeout_add_seconds(
-            GLib.PRIORITY_DEFAULT, seconds_delay, self._on_timer_fired, None
-        )
+        self._timer_id = GLib.timeout_add_seconds(seconds_delay, self._on_timer_fired, None)
 
     def _on_timer_fired(self, user_data: Any) -> bool:
         self._timer_id = None
