@@ -158,7 +158,9 @@ schedules and typing names stalled 19 times over 250ms; after, the worst stall w
   PyGObject publishes no wheels, so that path compiles it and pycairo from source.
 - `.github/workflows/release.yml` on `v*` tags (or `just release-dry-run`, which publishes nothing):
   version check, wheel + sdist, `.deb` and `.rpm` (each installed and smoke-tested), a Flatpak
-  bundle, FriendlyHub submission files, the GitHub release, then the AUR push. Full description and
+  bundle, FriendlyHub submission files, the GitHub release, then the AUR push (`aur.yml`, a
+  reusable workflow that can also be dispatched for an existing tag). Container jobs run as root
+  with `$HOME=/github/home`, but `ssh` uses the passwd home: always pass ssh file paths explicitly. Full description and
   one-time AUR key setup in `docs/releasing.md`.
 - Packaging lives in `packaging/`: `debian/` (copied to `debian/` at build time), `rpm/`,
   `aur/smart-dnd` (published by CI from the release tarball), `aur/smart-dnd-git` (manual),

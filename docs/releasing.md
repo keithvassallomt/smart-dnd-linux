@@ -58,6 +58,14 @@ git push origin --delete vX.Y.Z && git tag -d vX.Y.Z
 If the GitHub release was already created, delete it first with `gh release delete vX.Y.Z`. The AUR
 job runs last, so a failure before it never reaches the AUR.
 
+If only the AUR job failed, the GitHub release is fine; leave it. Rerunning the failed job reuses
+the workflow from the tagged commit, so if the fix is in the workflow, push it to `main` and publish
+with the AUR workflow on its own instead:
+
+```bash
+gh workflow run aur.yml -f version=X.Y.Z
+```
+
 ## What the workflow does
 
 | Job | Output |
@@ -69,7 +77,7 @@ job runs last, so a failure before it never reaches the AUR.
 | Flatpak | `smart-dnd-X-x86_64.flatpak` (GNOME runtime) |
 | FriendlyHub files | `com.keithvassallo.SmartDnd.yaml` (pointing at the tag) and the metainfo |
 | GitHub release | All of the above plus `SHA256SUMS`; notes from `CHANGELOG.md` |
-| AUR | Builds the `smart-dnd` PKGBUILD, then pushes `PKGBUILD` and `.SRCINFO` to the AUR |
+| AUR (`aur.yml`) | Builds the `smart-dnd` PKGBUILD, then pushes `PKGBUILD` and `.SRCINFO` to the AUR |
 
 The AUR job only runs after the GitHub release succeeds, so a failed build never reaches the AUR.
 

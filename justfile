@@ -132,13 +132,25 @@ release keep_notes="false" friendlyhub_dir="~/Downloads":
     done
     [ -n "$run" ] || die "the release workflow didn't start; check: gh run list --workflow release.yml"
     echo "https://github.com/$GH_REPO/actions/runs/$run"
-    gh run watch "$run" --exit-status --interval 30 > /dev/null \
-        || die "the release workflow failed: gh run view $run --log-failed (see docs/releasing.md)"
+    workflow_ok=true
+    gh run watch "$run" --exit-status --interval 30 > /dev/null || workflow_ok=false
 
-    # 4. FriendlyHub submission files.
-    mkdir -p "$dest"
-    gh release download "v$version" --pattern 'com.keithvassallo.SmartDnd.*' --dir "$dest" --clobber
-    echo
-    echo "Released v$version: $(gh release view "v$version" --json url --jq .url)"
+    # 4. FriendlyHub submission files: attached to the GitHub release, so fetch them
+    # whenever it exists, even if a later job (the AUR) failed.
+    if gh release view "v$version" > /dev/null 2>&1; then
+        mkdir -p "$dest"
+        gh release download "v$version" --pattern 'com.keithvassallo.SmartDnd.*' --dir "$dest" --clobber
+        echo
+        echo "Released v$version: $(gh release view "v$version" --json url --jq .url)"
+        echo "FriendlyHub files: $dest/com.keithvassallo.SmartDnd.yaml and .metainfo.xml"
+    fi
+    if [ "$workflow_ok" != true ]; then
+        failed=$(gh run view "$run" --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')
+        echo "error: release workflow failed in: $failed (gh run view $run --log-failed)" >&2
+        case "$failed" in
+            AUR*) echo "Only the AUR publish failed. Once fixed: gh workflow run aur.yml -f version=$version" >&2 ;;
+            *) echo "See docs/releasing.md, 'If the release workflow fails'." >&2 ;;
+        esac
+        exit 1
+    fi
     echo "AUR: https://aur.archlinux.org/packages/smart-dnd"
-    echo "FriendlyHub files: $dest/com.keithvassallo.SmartDnd.yaml and .metainfo.xml"
